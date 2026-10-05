@@ -16,6 +16,13 @@ point, and the existing `CNAME` file keeps the custom domain configured.
 Menu items and prices are maintained in `menu.js`. The light/dark theme
 preference is stored in the browser.
 
+## Typography
+
+The menu heading and category headings use the locally bundled Bangers font
+by The Bangers Project Authors, served from `fonts/bangers/`. It is distributed
+under the SIL Open Font License 1.1; see `fonts/bangers/OFL.txt`. The font is
+from [Google Fonts](https://github.com/google/fonts/tree/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/bangers).
+
 ## Color tokens
 
 The brand palette lives at the top of `styles.css` in the `--brand-*` tokens:
