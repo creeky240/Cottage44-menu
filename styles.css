@@ -101,26 +101,16 @@ a {
   text-decoration: none;
 }
 
-.wordmark__icon {
-  display: grid;
-  width: 2rem;
-  aspect-ratio: 1;
-  place-items: center;
-  border: 1px solid var(--green);
-  border-radius: 50%;
-  color: var(--green);
-  font-family: var(--serif);
-  font-size: 1.15rem;
-  font-weight: 600;
+.wordmark__logo {
+  display: block;
+  width: auto;
+  max-width: 3.25rem;
+  height: 3.8rem;
+  border-radius: 0.38rem;
+  box-shadow: 0 2px 8px rgb(43 53 42 / 10%);
+  object-fit: contain;
 }
 
-.wordmark__name {
-  font-size: 0.95rem;
-  font-weight: 700;
-  letter-spacing: -0.035em;
-}
-
-.wordmark__name span,
 .site-footer__brand span {
   color: var(--accent);
 }
@@ -147,7 +137,8 @@ a {
 
 .theme-toggle:focus-visible,
 .category-nav__link:focus-visible,
-.hero__link:focus-visible {
+.hero__link:focus-visible,
+.wordmark:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 3px;
 }
@@ -462,6 +453,10 @@ a {
   .site-header {
     width: calc(100% - 2rem);
     height: 4rem;
+  }
+
+  .wordmark__logo {
+    height: 3.4rem;
   }
 
   .hero {
