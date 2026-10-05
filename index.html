@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f7f5ef">
+    <meta
+      name="description"
+      content="Cottage 44 — Happy Food, Happy You. Browse our menu."
+    >
+    <title>Cottage 44 — Happy Food, Happy You</title>
+    <script>
+      const savedTheme = localStorage.getItem("cottage44-theme");
+      const initialTheme = savedTheme === "dark" || savedTheme === "light"
+        ? savedTheme
+        : window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light";
+      document.documentElement.dataset.theme = initialTheme;
+    </script>
+    <link rel="stylesheet" href="styles.css">
+    <script src="menu.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#menu">Skip to menu</a>
+    <header class="site-header">
+      <a class="wordmark" href="#top" aria-label="Cottage 44 home">
+        <span class="wordmark__icon" aria-hidden="true">C</span>
+        <span class="wordmark__name">Cottage <span>44</span></span>
+      </a>
+      <button
+        class="theme-toggle"
+        type="button"
+        aria-label="Switch to dark theme"
+        aria-pressed="false"
+      >
+        <svg class="theme-toggle__icon theme-toggle__icon--sun" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="4"></circle>
+          <path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"></path>
+        </svg>
+        <svg class="theme-toggle__icon theme-toggle__icon--moon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M20.2 15.1A8.5 8.5 0 0 1 8.9 3.8 8.5 8.5 0 1 0 20.2 15.1Z"></path>
+        </svg>
+        <span class="theme-toggle__label">Dark</span>
+      </button>
+    </header>
+
+    <main id="top">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero__ornament hero__ornament--one" aria-hidden="true"></div>
+        <div class="hero__ornament hero__ornament--two" aria-hidden="true"></div>
+        <h1 id="hero-title">Cottage <span>44</span></h1>
+        <p class="hero__slogan">Happy Food, Happy You</p>
+        <a class="hero__link" href="#menu">
+          Explore the menu
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v13m-5-5 5 5 5-5"></path></svg>
+        </a>
+      </section>
+
+      <nav class="category-nav" aria-label="Menu categories">
+        <div class="category-nav__inner" id="category-nav"></div>
+      </nav>
+
+      <section class="menu" id="menu" aria-label="Menu">
+        <div class="menu__intro">
+          <h2>Our menu</h2>
+        </div>
+        <div id="menu-sections"></div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="site-footer__brand">Cottage <span>44</span></div>
+      <p class="site-footer__slogan">Happy Food, Happy You</p>
+      <div class="payment-notes" aria-label="Payment notes">
+        <span>Airtime +18%</span>
+        <span class="payment-notes__divider" aria-hidden="true"></span>
+        <span>Card +4%</span>
+      </div>
+    </footer>
+  </body>
+</html>
