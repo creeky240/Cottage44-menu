@@ -1,3 +1,11 @@
+@font-face {
+  font-family: "Bangers";
+  src: url("fonts/bangers/Bangers-Regular.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
 :root {
   color-scheme: light;
   --brand-primary: #2c2a2a;
@@ -28,6 +36,7 @@
   --shadow: var(--color-shadow);
   --serif: Georgia, "Times New Roman", serif;
   --sans: "Avenir Next", Avenir, "Segoe UI", sans-serif;
+  --display: "Bangers", Impact, "Arial Narrow", sans-serif;
 }
 
 :root[data-theme="dark"] {
@@ -327,9 +336,9 @@ a {
 
 .menu__intro h2 {
   margin: 0.3rem 0 0;
-  font-family: var(--serif);
+  font-family: var(--display);
   font-size: clamp(2rem, 5vw, 2.65rem);
-  font-weight: 600;
+  font-weight: 400;
   letter-spacing: -0.045em;
 }
 
@@ -355,9 +364,9 @@ a {
   gap: 0.75rem;
   margin: 0 0 0.8rem;
   color: var(--green);
-  font-family: var(--serif);
+  font-family: var(--display);
   font-size: 1.45rem;
-  font-weight: 600;
+  font-weight: 400;
   letter-spacing: -0.025em;
 }
 
