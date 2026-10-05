@@ -133,9 +133,11 @@ function setTheme(theme) {
     `Switch to ${isDark ? "light" : "dark"} theme`,
   );
   themeLabel.textContent = isDark ? "Light" : "Dark";
-  document.querySelector('meta[name="theme-color"]').content = isDark
-    ? "#1c211c"
-    : "#f7f5ef";
+  document.querySelector('meta[name="theme-color"]').content = getComputedStyle(
+    document.documentElement,
+  )
+    .getPropertyValue("--color-page")
+    .trim();
 }
 
 setTheme(document.documentElement.dataset.theme);

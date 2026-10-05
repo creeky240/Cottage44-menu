@@ -1,31 +1,46 @@
 :root {
   color-scheme: light;
-  --page: #f7f5ef;
-  --surface: #fffefa;
-  --surface-muted: #efede5;
-  --ink: #25332a;
-  --ink-soft: #657168;
-  --green: #345b43;
-  --green-deep: #294b36;
-  --accent: #bd6848;
-  --line: #e5e1d6;
-  --shadow: 0 18px 55px rgb(43 53 42 / 7%);
+  --brand-primary: #345b43;
+  --brand-accent: #bd6848;
+  --brand-canvas: #f7f5ef;
+  --brand-surface: #fffefa;
+  --brand-surface-muted: #efede5;
+  --brand-ink: #25332a;
+  --brand-ink-muted: #657168;
+  --brand-line: #e5e1d6;
+  --color-page: var(--brand-canvas);
+  --color-surface: var(--brand-surface);
+  --color-surface-muted: var(--brand-surface-muted);
+  --color-text: var(--brand-ink);
+  --color-text-muted: var(--brand-ink-muted);
+  --color-primary: var(--brand-primary);
+  --color-accent: var(--brand-accent);
+  --color-border: var(--brand-line);
+  --color-shadow: 0 18px 55px rgb(43 53 42 / 7%);
+  --page: var(--color-page);
+  --surface: var(--color-surface);
+  --surface-muted: var(--color-surface-muted);
+  --ink: var(--color-text);
+  --ink-soft: var(--color-text-muted);
+  --green: var(--color-primary);
+  --accent: var(--color-accent);
+  --line: var(--color-border);
+  --shadow: var(--color-shadow);
   --serif: Georgia, "Times New Roman", serif;
   --sans: "Avenir Next", Avenir, "Segoe UI", sans-serif;
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --page: #1c211c;
-  --surface: #252c26;
-  --surface-muted: #303a31;
-  --ink: #f2f0e8;
-  --ink-soft: #b2bbae;
-  --green: #b9d1bd;
-  --green-deep: #d0e3d3;
-  --accent: #e19a79;
-  --line: #394139;
-  --shadow: 0 18px 55px rgb(0 0 0 / 17%);
+  --color-page: #1c211c;
+  --color-surface: #252c26;
+  --color-surface-muted: #303a31;
+  --color-text: #f2f0e8;
+  --color-text-muted: #b2bbae;
+  --color-primary: #b9d1bd;
+  --color-accent: #e19a79;
+  --color-border: #394139;
+  --color-shadow: 0 18px 55px rgb(0 0 0 / 17%);
 }
 
 * {
