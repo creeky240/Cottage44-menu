@@ -18,8 +18,9 @@ preference is stored in the browser.
 
 ## Color tokens
 
-The light-theme brand palette lives at the top of `styles.css` in the
-`--brand-*` tokens. Components should use the semantic `--color-*` tokens
-instead of hard-coding colors; those roles switch to readable dark-theme
-variants automatically. Update the brand tokens in one place to change the
-light palette consistently across the site.
+The brand palette lives at the top of `styles.css` in the `--brand-*` tokens:
+charcoal `--brand-primary` (`#2c2a2a`) and red `--brand-accent` (`#c32025`).
+Components should use the semantic `--color-*` tokens instead of hard-coding
+colors. Dark mode uses readable text and accent variants while the canonical
+brand tokens remain unchanged. Update the brand tokens in one place to change
+the palette consistently across the site.
