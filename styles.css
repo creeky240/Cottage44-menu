@@ -101,16 +101,26 @@ a {
   text-decoration: none;
 }
 
-.wordmark__logo {
-  display: block;
-  width: auto;
-  max-width: 3.25rem;
-  height: 3.8rem;
-  border-radius: 0.38rem;
-  box-shadow: 0 2px 8px rgb(43 53 42 / 10%);
-  object-fit: contain;
+.wordmark__icon {
+  display: grid;
+  width: 2rem;
+  aspect-ratio: 1;
+  place-items: center;
+  border: 1px solid var(--green);
+  border-radius: 50%;
+  color: var(--green);
+  font-family: var(--serif);
+  font-size: 1.15rem;
+  font-weight: 600;
 }
 
+.wordmark__name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+}
+
+.wordmark__name span,
 .site-footer__brand span {
   color: var(--accent);
 }
@@ -225,23 +235,18 @@ a {
 
 .hero h1 {
   position: relative;
-  margin: 0.55rem 0 0;
-  font-family: var(--serif);
-  font-size: clamp(3.5rem, 9vw, 6.6rem);
-  font-weight: 600;
-  letter-spacing: -0.07em;
-  line-height: 1.06;
+  margin: 0;
+  line-height: 0;
 }
 
-.hero h1 span {
-  color: var(--accent);
-}
-
-.hero__slogan {
-  margin: 0.7rem 0 0;
-  color: var(--ink-soft);
-  font-size: clamp(1rem, 2.6vw, 1.2rem);
-  letter-spacing: 0.025em;
+.hero__logo {
+  display: block;
+  width: auto;
+  max-width: min(100%, 13.35rem);
+  height: clamp(10rem, 32vw, 15rem);
+  border-radius: 0.55rem;
+  box-shadow: 0 8px 24px rgb(43 53 42 / 12%);
+  object-fit: contain;
 }
 
 .hero__link {
@@ -455,13 +460,13 @@ a {
     height: 4rem;
   }
 
-  .wordmark__logo {
-    height: 3.4rem;
+  .hero {
+    min-height: 22rem;
+    padding-block: 2.5rem 3rem;
   }
 
-  .hero {
-    min-height: 20rem;
-    padding-block: 3rem;
+  .hero__logo {
+    height: 11rem;
   }
 
   .category-nav__inner {
