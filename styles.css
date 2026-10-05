@@ -241,9 +241,9 @@ a {
 
 .hero__logo {
   display: block;
-  width: auto;
-  max-width: min(100%, 13.35rem);
-  height: clamp(10rem, 32vw, 15rem);
+  width: clamp(8rem, min(40vw, 24vh), 12rem);
+  max-width: 100%;
+  height: auto;
   border-radius: 0.55rem;
   box-shadow: 0 8px 24px rgb(43 53 42 / 12%);
   object-fit: contain;
@@ -463,10 +463,6 @@ a {
   .hero {
     min-height: 22rem;
     padding-block: 2.5rem 3rem;
-  }
-
-  .hero__logo {
-    height: 11rem;
   }
 
   .category-nav__inner {
