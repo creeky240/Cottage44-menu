@@ -98,6 +98,15 @@ settings into the `Cottage44_menu` environment secret, removing any leading
 or trailing whitespace, and rerun the workflow. Do not substitute the
 Supabase access token, publishable key, or dashboard password.
 
+To perform the one-time history repair without using a local terminal, open
+**Actions → Repair Supabase migration history → Run workflow**, choose the
+`dev` branch, and enter exactly `REPAIR_EXISTING_MIGRATIONS` in the
+confirmation field. The workflow uses the `Cottage44_menu` environment,
+marks only `20261007100000` and `20261007110000` as already applied, and then
+runs `supabase db push --linked --yes` for pending migrations. It does not
+print credentials or accept a project reference from the form. If the
+confirmation text is wrong, no repair job runs.
+
 GitHub Pages is the current static deployment; Cloudflare Pages is the proposed
 production host. This backend foundation does not deploy Pages or change DNS.
 See [the architecture proposal](docs/architecture.md) for setup status.

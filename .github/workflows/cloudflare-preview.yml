@@ -25,6 +25,9 @@ jobs:
         with:
           ref: refs/pull/${{ github.event.pull_request.number }}/merge
           persist-credentials: false
+          # This workflow uploads only the static docs/ directory. It does not
+          # execute checked-out code, install PR dependencies, or run PR scripts.
+          allow-unsafe-pr-checkout: true
 
       - name: Deploy Cloudflare Pages preview
         id: publish

@@ -226,6 +226,15 @@ publishable key, or dashboard login password is not a database password.
 Until `supabase db push` completes successfully, the future-planning policies
 are not confirmed as applied and the release must remain blocked.
 
+For the one-time repair, use **Actions → Repair Supabase migration history →
+Run workflow**, select the `dev` branch, and enter exactly
+`REPAIR_EXISTING_MIGRATIONS`. The workflow is gated by that confirmation,
+uses the `Cottage44_menu` environment, reconciles only migration versions
+`20261007100000` and `20261007110000`, and then runs
+`supabase db push --linked --yes`. It does not expose secrets or allow a
+project reference to be entered in the form. A wrong confirmation value
+causes the repair job to be skipped.
+
 Supabase may not know about SQL run directly in its SQL editor. Before
 automation is used, verify in that exact project that both schemas and policies
 from the migrations are already present, then run this one-time history
