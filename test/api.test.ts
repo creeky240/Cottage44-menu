@@ -124,7 +124,7 @@ test("today handler allow-lists and sanitizes a valid database plate", async () 
             name: "  Cottage burger  ",
             description: "Beef, cheese and chips",
             price_cents: 12500,
-            image_url: "https://images.example/plate.jpg",
+            image_url: "https://example.supabase.co/storage/v1/object/public/cottage44-plates/8d2b48f2-7932-4ff0-9e80-7ac5efc438f0.jpg",
             private_column: "must not escape",
           },
         },
@@ -139,7 +139,7 @@ test("today handler allow-lists and sanitizes a valid database plate", async () 
       name: "Cottage burger",
       description: "Beef, cheese and chips",
       priceCents: 12500,
-      imageUrl: "https://images.example/plate.jpg",
+      imageUrl: "https://example.supabase.co/storage/v1/object/public/cottage44-plates/8d2b48f2-7932-4ff0-9e80-7ac5efc438f0.jpg",
     },
   });
 });
