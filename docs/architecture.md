@@ -99,6 +99,11 @@ gate), disallow force pushes and branch deletion, and enforce the rules for
 administrators. Do not merge a failing or unchecked change. Production
 deployment should run only after a validated update reaches `main`.
 
+The PR, administrator-enforcement, conversation-resolution, force-push, and
+deletion protections have been enabled on both branches. Required CI contexts
+remain to be added after the new workflow has run successfully; this avoids
+blocking all merges on an unverified or incorrectly named status check.
+
 ## Environment and secrets
 
 The public Supabase URL and publishable/anon key are identifiers intended for
