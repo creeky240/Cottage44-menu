@@ -118,6 +118,16 @@ settings into the `Cottage44_menu` environment secret, removing any leading
 or trailing whitespace, and rerun the workflow. Do not substitute the
 Supabase access token, publishable key, or dashboard password.
 
+To repair the known migration-history drift without a local terminal, first
+merge the workflow-only PR that adds
+`.github/workflows/supabase-migration-repair.yml` to the repository's default
+`main` branch. GitHub lists `workflow_dispatch` workflows from the default
+branch. Then open **Actions → Repair Supabase migration history → Run
+workflow**, select `main`, and enter exactly
+`REPAIR_EXISTING_MIGRATIONS`. The job uses the `Cottage44_menu` environment,
+repairs only `20261007100000` and `20261007110000`, and runs
+`supabase db push --linked --yes`.
+
 Cloudflare Pages is the intended production host. This repository does not
 change provider settings or DNS. See [the architecture proposal](docs/architecture.md)
 for the manual cutover checklist.
