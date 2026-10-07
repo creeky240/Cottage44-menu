@@ -42,3 +42,31 @@ jobs:
             coverage/summary.txt
           if-no-files-found: warn
           retention-days: 14
+
+  codecov:
+    name: Upload coverage to Codecov
+    needs: checks
+    if: >-
+      needs.checks.result == 'success' &&
+      (github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: Cottage44_menu
+    permissions:
+      contents: read
+    steps:
+      - name: Download JavaScript coverage report
+        uses: actions/download-artifact@v4
+        with:
+          name: javascript-coverage
+          path: coverage
+      - name: Upload JavaScript coverage to Codecov
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage/lcov.info
+          disable_search: true
+          fail_ci_if_error: true
+          cleanup: true
+          name: docs-menu-js
