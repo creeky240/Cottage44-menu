@@ -222,15 +222,15 @@ function planningWeekdays(startDate) {
     if (day !== 0 && day !== 6) {
       dates.push(date.toISOString().slice(0, 10));
     }
-
-    function addDays(value, amount) {
-      const date = new Date(`${value}T00:00:00.000Z`);
-      date.setUTCDate(date.getUTCDate() + amount);
-      return date.toISOString().slice(0, 10);
-    }
     date.setUTCDate(date.getUTCDate() + 1);
   }
   return dates;
+}
+
+function addDays(value, amount) {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + amount);
+  return date.toISOString().slice(0, 10);
 }
 
 function renderWeeklyPlan() {
@@ -546,6 +546,7 @@ async function deletePlate(plate) {
     renderPlateList();
     setStatus("Plate deleted.", "success");
   } catch (error) {
+    console.error("dashboard load failed", error);
     setStatus(error.message, "error");
   }
 }
