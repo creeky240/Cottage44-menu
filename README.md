@@ -11,17 +11,20 @@ static file server.
 
 ## Backend foundation
 
-The first backend slice uses Cloudflare Pages Functions for server-side API
-requests to Supabase; the browser does not connect directly to the database.
-It adds `GET /api/health` and `GET /api/plates/today`. The daily plate uses the
-`Africa/Johannesburg` business date. See
-[the architecture and setup notes](docs/architecture.md) for the response
-shape, local Functions setup, and migration instructions.
+Cloudflare Pages Functions provide the API and owner administration. The
+public menu reads only today's plate; `/admin/` supports owner sign-in, saved
+plates, image uploads, date history, and setting today's plate. Supabase Auth
+password tokens are held in a Secure/HttpOnly/SameSite cookie and are never
+stored in browser local storage. Database and Storage RLS enforce the owner
+email independently of the UI. See
+[the architecture and setup notes](docs/architecture.md) for security choices,
+local bindings, production/preview configuration, and required manual setup.
 
 For local API development, install dependencies with `npm ci`, copy
 `.env.example` to `.dev.vars`, and replace its placeholders with the Supabase
 project URL and publishable key. Start Pages locally with `npm run dev`.
-`.dev.vars` is ignored by Git and must not be committed.
+`.dev.vars` is ignored by Git and must not be committed. The admin UI and API
+require Cloudflare Pages; GitHub Pages serves only the static menu.
 
 ## GitHub Pages
 

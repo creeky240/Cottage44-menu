@@ -38,7 +38,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function isSafeImageUrl(value: unknown): value is string | null {
+function isSafeImageUrl(value: unknown, supabaseOrigin: string): value is string | null {
   if (value === null) {
     return true;
   }
@@ -48,7 +48,17 @@ function isSafeImageUrl(value: unknown): value is string | null {
 
   try {
     const url = new URL(value);
-    return url.protocol === "https:" && !url.username && !url.password;
+    return (
+      url.origin === supabaseOrigin &&
+      url.pathname.startsWith("/storage/v1/object/public/cottage44-plates/") &&
+      /^\/storage\/v1\/object\/public\/cottage44-plates\/[0-9a-f-]{36}\.(?:jpg|png|webp)$/i.test(
+        url.pathname,
+      ) &&
+      !url.username &&
+      !url.password &&
+      !url.search &&
+      !url.hash
+    );
   } catch {
     return false;
   }
@@ -57,6 +67,7 @@ function isSafeImageUrl(value: unknown): value is string | null {
 function isDailyPlateRecord(
   value: unknown,
   serviceDate: string,
+  supabaseOrigin: string,
 ): value is DailyPlateRecord {
   if (!isRecord(value) || value.service_date !== serviceDate || !isRecord(value.plate)) {
     return false;
@@ -74,7 +85,7 @@ function isDailyPlateRecord(
     typeof plate.price_cents === "number" &&
     Number.isSafeInteger(plate.price_cents) &&
     plate.price_cents >= 0 &&
-    isSafeImageUrl(plate.image_url)
+    isSafeImageUrl(plate.image_url, supabaseOrigin)
   );
 }
 
@@ -139,7 +150,7 @@ export async function handleTodayRequest(
   if (rows.length === 0) {
     return jsonResponse({ plate: null });
   }
-  if (!isDailyPlateRecord(rows[0], serviceDate)) {
+  if (!isDailyPlateRecord(rows[0], serviceDate, config.url)) {
     logger.error("[api] Supabase returned a daily plate with an invalid schema.");
     return upstreamFailure();
   }

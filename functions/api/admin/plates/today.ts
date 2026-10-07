@@ -1,0 +1,195 @@
+import {
+  adminFailure,
+  adminSupabaseFetch,
+  getAdminApiContext,
+  readJsonBody,
+  validImageUrl,
+} from "../../../_shared/admin-api.ts";
+import {
+  isSameOriginMutation,
+  withCookie,
+  type AdminDependencies,
+} from "../../../_shared/admin.ts";
+import { getBusinessDate } from "../../../_shared/business-date.ts";
+import type { Env, SupabaseConfig } from "../../../_shared/config.ts";
+import { jsonResponse } from "../../../_shared/http.ts";
+
+type DailyPlate = {
+  service_date: string;
+  plate: {
+    id: string;
+    name: string;
+    description: string;
+    price_cents: number;
+    image_url: string | null;
+  };
+};
+
+function validDailyPlate(value: unknown, config: SupabaseConfig): value is DailyPlate {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const daily = value as Record<string, unknown>;
+  if (
+    typeof daily.service_date !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(daily.service_date) ||
+    typeof daily.plate !== "object" ||
+    daily.plate === null
+  ) {
+    return false;
+  }
+  const plate = daily.plate as Record<string, unknown>;
+  return (
+    typeof plate.id === "string" &&
+    /^[0-9a-f-]{36}$/i.test(plate.id) &&
+    typeof plate.name === "string" &&
+    plate.name.trim().length > 0 &&
+    plate.name.length <= 120 &&
+    typeof plate.description === "string" &&
+    plate.description.length <= 1000 &&
+    typeof plate.price_cents === "number" &&
+    Number.isSafeInteger(plate.price_cents) &&
+    plate.price_cents >= 0 &&
+    validImageUrl(plate.image_url, config)
+  );
+}
+
+function mapDailyPlate(value: DailyPlate) {
+  return {
+    serviceDate: value.service_date,
+    plate: {
+      id: value.plate.id,
+      name: value.plate.name,
+      description: value.plate.description,
+      priceCents: value.plate.price_cents,
+      imageUrl: value.plate.image_url,
+    },
+  };
+}
+
+export async function handleTodayAdminRequest(
+  request: Request,
+  env: Env,
+  dependencies: AdminDependencies = {},
+  now?: Date,
+): Promise<Response> {
+  if (!["GET", "POST"].includes(request.method)) {
+    return jsonResponse({ error: "Method not allowed." }, 405);
+  }
+  if (request.method === "POST" && !isSameOriginMutation(request)) {
+    return jsonResponse({ error: "Forbidden." }, 403);
+  }
+  const result = await getAdminApiContext(request, env, dependencies);
+  if ("response" in result) {
+    return withCookie(result.response, result.cookie);
+  }
+  const { context } = result;
+
+  if (request.method === "GET") {
+    const query = new URLSearchParams({
+      select: "service_date,plate:plates(id,name,description,price_cents,image_url)",
+      order: "service_date.desc",
+      limit: "365",
+    });
+    const response = await adminSupabaseFetch(
+      context,
+      `/rest/v1/daily_plates?${query.toString()}`,
+      { method: "GET" },
+      dependencies,
+    );
+    if (!response?.ok) {
+      return withCookie(
+        adminFailure(dependencies.logger ?? console, "Daily plate history request failed."),
+        context.cookie,
+      );
+    }
+    let rows: unknown;
+    try {
+      rows = await response.json();
+    } catch {
+      rows = null;
+    }
+    if (
+      !Array.isArray(rows) ||
+      rows.length > 365 ||
+      !rows.every((row) => validDailyPlate(row, context.config))
+    ) {
+      return withCookie(
+        adminFailure(dependencies.logger ?? console, "Daily plate history response was invalid."),
+        context.cookie,
+      );
+    }
+    const todayDate = getBusinessDate(now);
+    const history = rows.map(mapDailyPlate);
+    return withCookie(
+      jsonResponse({
+        serviceDate: todayDate,
+        today: history.find((item) => item.serviceDate === todayDate)?.plate ?? null,
+        history,
+      }),
+      context.cookie,
+    );
+  }
+
+  const body = await readJsonBody(request, 4096);
+  if (
+    typeof body !== "object" ||
+    body === null ||
+    !("plateId" in body) ||
+    typeof body.plateId !== "string" ||
+    !/^[0-9a-f-]{36}$/i.test(body.plateId)
+  ) {
+    return withCookie(
+      jsonResponse({ error: "Choose a saved plate." }, 400),
+      context.cookie,
+    );
+  }
+  const serviceDate = getBusinessDate(now);
+  const response = await adminSupabaseFetch(
+    context,
+    "/rest/v1/daily_plates?on_conflict=service_date&select=service_date,plate:plates(id,name,description,price_cents,image_url)",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates,return=representation",
+      },
+      body: JSON.stringify({
+        service_date: serviceDate,
+        plate_id: body.plateId,
+      }),
+    },
+    dependencies,
+  );
+  if (!response?.ok) {
+    return withCookie(
+      adminFailure(dependencies.logger ?? console, "Setting today's plate failed."),
+      context.cookie,
+    );
+  }
+  let rows: unknown;
+  try {
+    rows = await response.json();
+  } catch {
+    rows = null;
+  }
+  if (
+    !Array.isArray(rows) ||
+    rows.length !== 1 ||
+    !validDailyPlate(rows[0], context.config) ||
+    rows[0].service_date !== serviceDate ||
+    rows[0].plate.id !== body.plateId
+  ) {
+    return withCookie(
+      adminFailure(dependencies.logger ?? console, "Today's plate response was invalid."),
+      context.cookie,
+    );
+  }
+  return withCookie(
+    jsonResponse({ today: mapDailyPlate(rows[0]) }),
+    context.cookie,
+  );
+}
+
+export const onRequest = ({ request, env }: { request: Request; env: Env }) =>
+  handleTodayAdminRequest(request, env);

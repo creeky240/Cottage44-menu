@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="theme-color" content="#f7f5ef">
+    <title>Owner admin — Cottage 44</title>
+    <link rel="stylesheet" href="admin.css">
+    <script src="admin.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to owner controls</a>
+    <header class="header">
+      <a class="brand" href="/">Cottage <span>44</span><small>Owner admin</small></a>
+      <button id="sign-out" class="button button--quiet" type="button" hidden>Sign out</button>
+    </header>
+    <main id="main">
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+      <section id="sign-in-panel" class="panel sign-in" aria-labelledby="sign-in-title">
+        <h1 id="sign-in-title">Owner sign in</h1>
+        <p>Sign in with the owner account to manage today’s plate.</p>
+        <form id="sign-in-form">
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" autocomplete="username" required>
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" required>
+          <label class="remember-option" for="remember-me">
+            <input id="remember-me" name="rememberMe" type="checkbox" checked>
+            Remember me for 30 days
+          </label>
+          <button class="button" type="submit">Sign in</button>
+        </form>
+      </section>
+
+      <div id="dashboard" hidden>
+        <section class="panel" aria-labelledby="today-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">South African service date</p>
+              <h1 id="today-title">Today’s plate <span id="service-date"></span></h1>
+            </div>
+          </div>
+          <p id="today-summary">No plate has been selected for today.</p>
+          <label for="today-select">Choose a saved plate</label>
+          <div class="inline-form">
+            <select id="today-select" aria-label="Choose a saved plate for today"></select>
+            <button id="set-today" class="button" type="button">Set as today’s plate</button>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="editor-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Create or update a saved plate</p>
+              <h2 id="editor-title">Plate details</h2>
+            </div>
+            <button id="new-plate" class="button button--quiet" type="button">New plate</button>
+          </div>
+          <form id="plate-form">
+            <input id="plate-id" type="hidden">
+            <label for="plate-name">Name</label>
+            <input id="plate-name" name="name" maxlength="120" required>
+            <label for="plate-description">Description</label>
+            <textarea id="plate-description" name="description" maxlength="1000" rows="3"></textarea>
+            <label for="plate-price">Price (ZAR)</label>
+            <input id="plate-price" name="price" type="number" min="0" max="1000000" step="0.01" required>
+            <label for="plate-image">Plate photo (JPEG, PNG, or WebP; maximum 5 MB)</label>
+            <input id="plate-image" name="image" type="file" accept="image/jpeg,image/png,image/webp">
+            <p id="image-note" class="muted">No photo selected. Choosing a new image replaces the saved photo.</p>
+            <div class="inline-form">
+              <button class="button" type="submit">Save plate</button>
+              <button id="cancel-edit" class="button button--quiet" type="button" hidden>Cancel edit</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel" aria-labelledby="saved-title">
+          <h2 id="saved-title">Saved plates</h2>
+          <ul id="plate-list" class="plate-list"></ul>
+        </section>
+
+        <section class="panel" aria-labelledby="history-title">
+          <h2 id="history-title">Recent history</h2>
+          <ol id="history-list" class="history-list"></ol>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>
