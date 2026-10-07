@@ -236,9 +236,11 @@ publishable key, or dashboard login password is not a database password.
 Until `supabase db push` completes successfully, the future-planning policies
 are not confirmed as applied and the release must remain blocked.
 
-For the one-time repair, use **Actions → Repair Supabase migration history →
-Run workflow**, select the `dev` branch, and enter exactly
-`REPAIR_EXISTING_MIGRATIONS`. The workflow is gated by that confirmation,
+For the one-time repair, after the workflow is present on the repository's
+default `main` branch, use **Actions → Repair Supabase migration history →
+Run workflow**, select the `main` branch, and enter exactly
+`REPAIR_EXISTING_MIGRATIONS`. GitHub lists manually runnable workflows from
+the default branch. The workflow is gated by that confirmation,
 uses the `Cottage44_menu` environment, reconciles only migration versions
 `20261007100000` and `20261007110000`, and then runs
 `supabase db push --linked --yes`. It does not expose secrets or allow a

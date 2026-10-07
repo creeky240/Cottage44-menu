@@ -107,10 +107,12 @@ settings into the `Cottage44_menu` environment secret, removing any leading
 or trailing whitespace, and rerun the workflow. Do not substitute the
 Supabase access token, publishable key, or dashboard password.
 
-To perform the one-time history repair without using a local terminal, open
+To perform the one-time history repair without using a local terminal, after
+this workflow is present on the repository's default `main` branch, open
 **Actions → Repair Supabase migration history → Run workflow**, choose the
-`dev` branch, and enter exactly `REPAIR_EXISTING_MIGRATIONS` in the
-confirmation field. The workflow uses the `Cottage44_menu` environment,
+`main` branch, and enter exactly `REPAIR_EXISTING_MIGRATIONS` in the
+confirmation field. GitHub lists manually runnable workflows from the default
+branch, not only from `dev`. The workflow uses the `Cottage44_menu` environment,
 marks only `20261007100000` and `20261007110000` as already applied, and then
 runs `supabase db push --linked --yes` for pending migrations. It does not
 print credentials or accept a project reference from the form. If the

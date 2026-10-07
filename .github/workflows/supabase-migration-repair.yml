@@ -11,6 +11,9 @@ on:
 permissions:
   contents: read
 
+# Keep this workflow on the default branch as well as dev. GitHub only lists
+# workflow_dispatch workflows from the repository default branch.
+
 concurrency:
   group: supabase-migration-repair-${{ github.repository }}
   cancel-in-progress: false
