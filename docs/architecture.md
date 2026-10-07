@@ -83,7 +83,19 @@ short-lived `HttpOnly` recovery cookie is set. The password update validates
 that cookie against Supabase again before updating the password. Neither
 recovery tokens nor session tokens are exposed to browser JavaScript or
 stored in local storage. Supabase Auth's email rate limits apply to reset
-requests.
+requests. If Supabase rejects the send or is unavailable, the page shows a
+generic retry-later message rather than saying an email was sent; logs record
+only the upstream HTTP status, never its body or the submitted address.
+
+Supabase's built-in SMTP is best-effort and currently permits only two emails
+per project per hour, and only to addresses belonging to the Supabase
+organization team. The `/auth/v1/recover` endpoint also defaults to a
+60-second per-user cooldown. A 429 response is surfaced as a generic
+retry-later message; wait at least one minute between attempts and check
+**Authentication → SMTP Settings** and **Authentication → Rate Limits**.
+For reliable delivery to an address that is not on the organization team,
+configure a custom SMTP provider; do not repeatedly request resets to test
+delivery.
 
 The server accepts only `corne.dawson@gmail.com`, verified against the
 Supabase Auth user email on sign-in and on every request. It does not trust
@@ -246,3 +258,10 @@ References checked 7 October 2026:
    The function verifies this recovery token and owner account before it
    displays the new-password form. The email URL is one-time; if it expires,
    request another reset email.
+10. If reset mail does not arrive, first check **Authentication → SMTP
+    Settings** and **Authentication → Rate Limits**. Supabase's built-in SMTP
+    only sends to organization-team addresses and is limited to two emails
+    per project per hour; `/auth/v1/recover` also applies a default 60-second
+    per-user cooldown. Wait before another attempt. For delivery to other
+    addresses or production use, configure a custom SMTP provider in Supabase
+    **Authentication → SMTP Settings**.

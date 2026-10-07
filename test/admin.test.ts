@@ -186,6 +186,97 @@ test("password reset requests do not reveal whether an email belongs to the owne
   assert.deepEqual(calls[0].body, { email: OWNER_EMAIL });
 });
 
+test("password reset provider failures return a generic error and log only the HTTP status", async () => {
+  for (const status of [400, 429, 500]) {
+    const secretDetails = {
+      code: "over_email_send_rate_limit",
+      message: `Email ${OWNER_EMAIL} token sensitive-provider-detail`,
+    };
+    const logs: string[] = [];
+    let fetchCalls = 0;
+    const response = await handlePasswordRecoveryRequest(
+      recoveryRequest("/api/admin/password-recovery", { email: OWNER_EMAIL }),
+      env,
+      {
+        logger: { error: (message) => logs.push(message) },
+        fetchImpl: async () => {
+          fetchCalls += 1;
+          return jsonResponse(secretDetails, status);
+        },
+      },
+    );
+    const body = await response.json();
+
+    assert.equal(fetchCalls, 1);
+    assert.equal(response.status, 503);
+    assert.deepEqual(body, {
+      error: {
+        code: "RECOVERY_REQUEST_FAILED",
+        message:
+          "We couldn't process the password reset request right now. Please wait before trying again.",
+      },
+    });
+    assert.equal(logs.length, 1);
+    assert.equal(
+      logs[0],
+      `[admin] Supabase recovery request failed with HTTP ${status}.`,
+    );
+    assert.doesNotMatch(
+      JSON.stringify(body),
+      /over_email_send_rate_limit|sensitive-provider-detail|corne\.dawson/,
+    );
+    assert.doesNotMatch(
+      logs.join("\n"),
+      /over_email_send_rate_limit|sensitive-provider-detail|corne\.dawson/,
+    );
+  }
+});
+
+test("password reset provider success keeps the generic non-enumerating response", async () => {
+  let fetchCalls = 0;
+  const response = await handlePasswordRecoveryRequest(
+    recoveryRequest("/api/admin/password-recovery", { email: OWNER_EMAIL }),
+    env,
+    {
+      logger: { error: () => assert.fail("Successful provider request must not be logged") },
+      fetchImpl: async () => {
+        fetchCalls += 1;
+        return jsonResponse({}, 200);
+      },
+    },
+  );
+
+  assert.equal(fetchCalls, 1);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    message:
+      "If the address belongs to the owner account, a password reset email will arrive shortly. Check the inbox and spam folder.",
+  });
+});
+
+test("password reset transport failure returns a safe retry-later response", async () => {
+  const logs: string[] = [];
+  const response = await handlePasswordRecoveryRequest(
+    recoveryRequest("/api/admin/password-recovery", { email: OWNER_EMAIL }),
+    env,
+    {
+      logger: { error: (message) => logs.push(message) },
+      fetchImpl: async () => {
+        throw new Error(`private network detail for ${OWNER_EMAIL}`);
+      },
+    },
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 503);
+  assert.match(body.error.message, /couldn't process the password reset request/i);
+  assert.equal(
+    logs[0],
+    "[admin] Supabase recovery request failed before receiving a response.",
+  );
+  assert.doesNotMatch(logs.join("\n"), /private network detail|corne\.dawson/);
+});
+
 test("password reset uses the current trusted Cloudflare preview host without per-preview configuration", async () => {
   const previewEnv: Env = {
     SUPABASE_URL: env.SUPABASE_URL,

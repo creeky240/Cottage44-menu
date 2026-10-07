@@ -17,6 +17,8 @@ const RECOVERY_COOKIE = "c44_recovery";
 const RECOVERY_MAX_AGE = 60 * 10;
 const GENERIC_REQUEST_MESSAGE =
   "If the address belongs to the owner account, a password reset email will arrive shortly. Check the inbox and spam folder.";
+const RECOVERY_REQUEST_FAILED_MESSAGE =
+  "We couldn't process the password reset request right now. Please wait before trying again.";
 
 type RecoverySession = {
   accessToken: string;
@@ -217,10 +219,30 @@ export async function handlePasswordRecoveryRequest(
         },
       );
       if (!response.ok) {
-        logger.error(`[admin] Supabase recovery request returned HTTP ${response.status}.`);
+        logger.error(
+          `[admin] Supabase recovery request failed with HTTP ${response.status}.`,
+        );
+        return jsonResponse(
+          {
+            error: {
+              code: "RECOVERY_REQUEST_FAILED",
+              message: RECOVERY_REQUEST_FAILED_MESSAGE,
+            },
+          },
+          503,
+        );
       }
     } catch {
-      logger.error("[admin] Supabase recovery request failed.");
+      logger.error("[admin] Supabase recovery request failed before receiving a response.");
+      return jsonResponse(
+        {
+          error: {
+            code: "RECOVERY_REQUEST_FAILED",
+            message: RECOVERY_REQUEST_FAILED_MESSAGE,
+          },
+        },
+        503,
+      );
     }
   }
 

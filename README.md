@@ -31,6 +31,9 @@ Cloudflare Pages preview origins are resolved from the request only when they
 match this project's `*.cottage44-menu-pages.pages.dev` domain. Configure the
 Supabase redirect allow-list and recovery email template as described in
 [the setup notes](docs/architecture.md#local-setup-and-manual-account-steps).
+If a reset email is not delivered, check Supabase SMTP settings and rate
+limits before requesting another: its built-in SMTP is limited to two
+messages per project per hour and only sends to organization-team addresses.
 
 ## GitHub Pages
 
