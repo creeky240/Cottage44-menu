@@ -91,7 +91,8 @@ is dependency installation, lint, type checking, unit/integration tests, and a
 production build; add end-to-end checks as the app gains those workflows. Checks
 should run for PRs into both `dev` and `main`, and for pushes to both branches.
 The exact check names should be made required only after the workflow has run
-successfully at least once.
+successfully at least once. The initial workflow now provides `CI / checks`,
+and this check is configured as required on both protected branches.
 
 Protect both `dev` and `main`: require pull requests and successful required CI
 checks, do not require a separate approval (the owner chose a solo-friendly
@@ -100,9 +101,8 @@ administrators. Do not merge a failing or unchecked change. Production
 deployment should run only after a validated update reaches `main`.
 
 The PR, administrator-enforcement, conversation-resolution, force-push, and
-deletion protections have been enabled on both branches. Required CI contexts
-remain to be added after the new workflow has run successfully; this avoids
-blocking all merges on an unverified or incorrectly named status check.
+deletion protections have been enabled on both branches. The required status
+context is `CI / checks`, with strict up-to-date checks enabled.
 
 ## Environment and secrets
 
