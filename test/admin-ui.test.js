@@ -146,6 +146,12 @@ test("admin UI remembers by default and completes sign-in, upload, save, and tod
   let todaysPlate = null;
   let failSignIn = true;
   let failImageUpload = false;
+  let failSave = false;
+  let failSchedule = false;
+  let failDelete = false;
+  let failRecovery = false;
+  let failReset = false;
+  let failSignOut = false;
   let holdAssignment = false;
   let resolveAssignment;
   const imageUrl =
@@ -163,12 +169,24 @@ test("admin UI remembers by default and completes sign-in, upload, save, and tod
       return Response.json({ authenticated: true, email: "corne.dawson@gmail.com" });
     }
     if (url === "/api/admin/password-recovery" && options.method === "POST") {
+      if (failRecovery) {
+        return Response.json({ error: "Recovery service unavailable." }, { status: 503 });
+      }
       return Response.json({
         message: "If the address belongs to the owner account, a password reset email will arrive shortly.",
       });
     }
     if (url === "/api/admin/password-recovery/update" && options.method === "POST") {
+      if (failReset) {
+        return Response.json({ error: "Password reset service unavailable." }, { status: 503 });
+      }
       return Response.json({ updated: true });
+    }
+    if (url === "/api/admin/session" && options.method === "DELETE") {
+      if (failSignOut) {
+        return Response.json({ error: "Sign-out service unavailable." }, { status: 503 });
+      }
+      return Response.json({ signedOut: true });
     }
     if (url === "/api/admin/plates" && !options.method) {
       return Response.json({ plates: savedPlates });
@@ -187,6 +205,9 @@ test("admin UI remembers by default and completes sign-in, upload, save, and tod
       return Response.json({ imageUrl });
     }
     if (url === "/api/admin/plates" && options.method === "POST") {
+      if (failSave) {
+        return Response.json({ error: "Plate save service unavailable." }, { status: 503 });
+      }
       const input = JSON.parse(options.body);
       const plate = {
         id: "8d2b48f2-7932-4ff0-9e80-7ac5efc438f0",
@@ -202,6 +223,9 @@ test("admin UI remembers by default and completes sign-in, upload, save, and tod
       return Response.json({ plate });
     }
     if (url === "/api/admin/plates/today" && options.method === "POST") {
+      if (failSchedule) {
+        return Response.json({ error: "Planning service unavailable." }, { status: 503 });
+      }
       const { plateId } = JSON.parse(options.body);
       todaysPlate = savedPlates.find((plate) => plate.id === plateId);
       const response = Response.json({
@@ -216,6 +240,13 @@ test("admin UI remembers by default and completes sign-in, upload, save, and tod
         });
       }
       return response;
+    }
+    if (url.startsWith("/api/admin/plates/") && options.method === "DELETE") {
+      if (failDelete) {
+        return Response.json({ error: "Delete service unavailable." }, { status: 503 });
+      }
+      savedPlates = [];
+      return Response.json({ deleted: true });
     }
     throw new Error(`Unexpected fake API request: ${options.method ?? "GET"} ${url}`);
   }
@@ -237,7 +268,12 @@ test("admin UI remembers by default and completes sign-in, upload, save, and tod
   }
 
   const document = {
-    querySelector: (selector) => elements[selector],
+    querySelector: (selector) => {
+      if (selector.startsWith('[aria-label="Delete ')) {
+        return elements["#plate-list"].children[0]?.children[1]?.children[1] ?? null;
+      }
+      return elements[selector];
+    },
     createElement: () => new Element(),
   };
   const context = vm.createContext({
@@ -367,6 +403,77 @@ test("admin UI remembers by default and completes sign-in, upload, save, and tod
   assert.deepEqual(JSON.parse(recoveryCall.options.body), {
     email: "corne.dawson@gmail.com",
   });
+
+  // Exercise the duplicate-submit guards and user-visible failure paths for each
+  // mutation control without waiting on a real network request.
+  elements["#save-schedule"].disabled = true;
+  await elements["#save-schedule"].listeners.click();
+  elements["#save-schedule"].disabled = false;
+  elements["#schedule-date"].value = "";
+  elements["#schedule-select"].value = "";
+  await elements["#save-schedule"].listeners.click();
+  elements["#schedule-date"].value = "2026-10-08";
+  elements["#schedule-select"].value = savedPlates[0].id;
+  failSchedule = true;
+  await elements["#save-schedule"].listeners.click();
+  failSchedule = false;
+
+  const weeklyRow = elements["#weekly-plan-list"].children[0];
+  const weeklySelect = weeklyRow.children[1];
+  const weeklyButton = weeklyRow.children[2];
+  weeklyButton.disabled = true;
+  await weeklyButton.listeners.click();
+  weeklyButton.disabled = false;
+  weeklySelect.value = "";
+  await weeklyButton.listeners.click();
+  weeklySelect.value = savedPlates[0].id;
+  failSchedule = true;
+  await weeklyButton.listeners.click();
+  failSchedule = false;
+
+  const deleteButton = elements["#plate-list"].children[0].children[1].children[1];
+  failDelete = true;
+  await deleteButton.listeners.click();
+  failDelete = false;
+  deleteButton.disabled = true;
+  await deleteButton.listeners.click();
+  deleteButton.disabled = false;
+
+  elements["#sign-in-submit"].disabled = true;
+  await elements["#sign-in-form"].listeners.submit({ preventDefault() {} });
+  elements["#sign-in-submit"].disabled = false;
+
+  failRecovery = true;
+  await elements["#recovery-request-form"].listeners.submit({ preventDefault() {} });
+  failRecovery = false;
+  elements["#recovery-submit"].disabled = true;
+  await elements["#recovery-request-form"].listeners.submit({ preventDefault() {} });
+  elements["#recovery-submit"].disabled = false;
+
+  failReset = true;
+  await elements["#password-reset-form"].listeners.submit({ preventDefault() {} });
+  failReset = false;
+  elements["#password-reset-submit"].disabled = true;
+  await elements["#password-reset-form"].listeners.submit({ preventDefault() {} });
+  elements["#password-reset-submit"].disabled = false;
+
+  failSignOut = true;
+  await elements["#sign-out"].listeners.click();
+  failSignOut = false;
+  elements["#sign-out"].disabled = true;
+  await elements["#sign-out"].listeners.click();
+  elements["#sign-out"].disabled = false;
+
+  elements["#price-input"] = elements["#plate-price"];
+  elements["#plate-price"].value = "not-a-price";
+  await elements["#plate-form"].listeners.submit({ preventDefault() {} });
+  elements["#plate-price"].value = "50";
+  elements["#save-plate"].disabled = true;
+  await elements["#plate-form"].listeners.submit({ preventDefault() {} });
+  elements["#save-plate"].disabled = false;
+
+  elements["#today-select"].value = "";
+  await elements["#set-today"].listeners.click();
 });
 
 test("admin UI converts HEIC and large camera photos before upload", async () => {
