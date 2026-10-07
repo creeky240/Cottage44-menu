@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const html = await readFile(path.join(root, "docs/index.html"), "utf8");
+const styles = await readFile(path.join(root, "docs/styles.css"), "utf8");
 const menuScript = await readFile(path.join(root, "docs/menu.js"), "utf8");
 
 class Element {
@@ -351,4 +352,16 @@ test("includes a labelled Plate of the Day live region in the page", () => {
   assert.match(html, /<section class="plate-day" aria-labelledby="plate-day-title">/);
   assert.match(html, /id="today-plate"[\s\S]*aria-live="polite"/);
   assert.match(html, /id="plate-day-title">Plate of the Day<\/h2>/);
+});
+
+test("provides a subtle owner sign-in link in the public site footer", () => {
+  assert.match(
+    html,
+    /<a class="site-footer__admin" href="\/admin\/">Owner sign in<\/a>/,
+  );
+});
+
+test("uses the exact Cottage 44 red accent in both public light and dark themes", () => {
+  assert.match(styles, /--brand-accent:\s*#C12025;/);
+  assert.match(styles, /:root\[data-theme="dark"\][\s\S]*?--color-accent:\s*#C12025;/);
 });

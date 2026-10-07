@@ -25,6 +25,15 @@ For local API development, install dependencies with `npm ci`, copy
 project URL and publishable key. Start Pages locally with `npm run dev`.
 `.dev.vars` is ignored by Git and must not be committed. The admin UI and API
 require Cloudflare Pages; GitHub Pages serves only the static menu.
+Owner password resets use Supabase's one-time recovery email. Configure
+`ADMIN_SITE_URL` for the production custom domain and local development.
+Cloudflare Pages preview origins are resolved from the request only when they
+match this project's `*.cottage44-menu-pages.pages.dev` domain. Configure the
+Supabase redirect allow-list and recovery email template as described in
+[the setup notes](docs/architecture.md#local-setup-and-manual-account-steps).
+If a reset email is not delivered, check Supabase SMTP settings and rate
+limits before requesting another: its built-in SMTP is limited to two
+messages per project per hour and only sends to organization-team addresses.
 
 ## GitHub Pages
 
@@ -85,7 +94,6 @@ distributed under the SIL Open Font License 1.1; see
 
 The brand palette lives at the top of `docs/styles.css` in the `--brand-*`
 tokens: charcoal `--brand-primary` (`#2c2a2a`) and red `--brand-accent`
-(`#c32025`). Components should use the semantic `--color-*` tokens instead of
-hard-coding colors. Dark mode uses readable text and accent variants while the
-canonical brand tokens remain unchanged. Update the brand tokens in one place
-to change the palette consistently across the site.
+(`#C12025`). Components should use the semantic `--color-*` tokens instead of
+hard-coding colors. Both light and dark themes use the same brand accent,
+including on the owner admin page.

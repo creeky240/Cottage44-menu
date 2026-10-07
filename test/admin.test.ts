@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { OWNER_EMAIL, sessionCookie } from "../functions/_shared/admin.ts";
+import {
+  handlePasswordRecoveryRequest,
+  handlePasswordRecoveryUpdate,
+  handlePasswordRecoveryVerification,
+} from "../functions/_shared/recovery.ts";
 import { handleImageUpload } from "../functions/api/admin/images.ts";
 import { handlePlateRequest } from "../functions/api/admin/plates/[id].ts";
 import { handlePlatesRequest } from "../functions/api/admin/plates.ts";
@@ -11,6 +16,7 @@ import type { Env } from "../functions/_shared/config.ts";
 const env: Env = {
   SUPABASE_URL: "https://cottage44-test.supabase.co",
   SUPABASE_PUBLISHABLE_KEY: "sb_publishable_fake_for_tests",
+  ADMIN_SITE_URL: "https://menu.example",
 };
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -129,6 +135,400 @@ test("sign-in rejects non-owner emails and cross-origin requests before contacti
   assert.equal(wrongEmail.status, 401);
   assert.equal(crossOrigin.status, 403);
   assert.equal(fetchCalls, 0);
+});
+
+function recoveryRequest(
+  path: string,
+  body: unknown,
+  url = `https://menu.example${path}`,
+): Request {
+  const origin = new URL(url).origin;
+  return new Request(url, {
+    method: "POST",
+    headers: {
+      Origin: origin,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+test("password reset requests do not reveal whether an email belongs to the owner", async () => {
+  const calls: Array<{ url: string; body: unknown }> = [];
+  const fetchImpl = async (input: RequestInfo | URL, init?: RequestInit) => {
+    calls.push({
+      url: String(input),
+      body: JSON.parse(String(init?.body)),
+    });
+    return jsonResponse({});
+  };
+  const ownerResponse = await handlePasswordRecoveryRequest(
+    recoveryRequest("/api/admin/password-recovery", { email: OWNER_EMAIL }),
+    env,
+    { fetchImpl },
+  );
+  const otherResponse = await handlePasswordRecoveryRequest(
+    recoveryRequest("/api/admin/password-recovery", { email: "person@example.com" }),
+    env,
+    { fetchImpl },
+  );
+  const ownerBody = await ownerResponse.json();
+  const otherBody = await otherResponse.json();
+
+  assert.equal(ownerResponse.status, 200);
+  assert.equal(otherResponse.status, 200);
+  assert.deepEqual(ownerBody, otherBody);
+  assert.match(ownerBody.message, /if the address belongs to the owner/i);
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].url, /\/auth\/v1\/recover\?redirect_to=/);
+  const redirect = new URLSearchParams(new URL(calls[0].url).search).get("redirect_to");
+  assert.equal(redirect, "https://menu.example/api/admin/password-recovery/verify");
+  assert.deepEqual(calls[0].body, { email: OWNER_EMAIL });
+});
+
+test("password reset provider failures return a generic error and log only the HTTP status", async () => {
+  for (const status of [400, 429, 500]) {
+    const secretDetails = {
+      code: "over_email_send_rate_limit",
+      message: `Email ${OWNER_EMAIL} token sensitive-provider-detail`,
+    };
+    const logs: string[] = [];
+    let fetchCalls = 0;
+    const response = await handlePasswordRecoveryRequest(
+      recoveryRequest("/api/admin/password-recovery", { email: OWNER_EMAIL }),
+      env,
+      {
+        logger: { error: (message) => logs.push(message) },
+        fetchImpl: async () => {
+          fetchCalls += 1;
+          return jsonResponse(secretDetails, status);
+        },
+      },
+    );
+    const body = await response.json();
+
+    assert.equal(fetchCalls, 1);
+    assert.equal(response.status, 503);
+    assert.deepEqual(body, {
+      error: {
+        code: "RECOVERY_REQUEST_FAILED",
+        message:
+          "We couldn't process the password reset request right now. Please wait before trying again.",
+      },
+    });
+    assert.equal(logs.length, 1);
+    assert.equal(
+      logs[0],
+      `[admin] Supabase recovery request failed with HTTP ${status}.`,
+    );
+    assert.doesNotMatch(
+      JSON.stringify(body),
+      /over_email_send_rate_limit|sensitive-provider-detail|corne\.dawson/,
+    );
+    assert.doesNotMatch(
+      logs.join("\n"),
+      /over_email_send_rate_limit|sensitive-provider-detail|corne\.dawson/,
+    );
+  }
+});
+
+test("password reset provider success keeps the generic non-enumerating response", async () => {
+  let fetchCalls = 0;
+  const response = await handlePasswordRecoveryRequest(
+    recoveryRequest("/api/admin/password-recovery", { email: OWNER_EMAIL }),
+    env,
+    {
+      logger: { error: () => assert.fail("Successful provider request must not be logged") },
+      fetchImpl: async () => {
+        fetchCalls += 1;
+        return jsonResponse({}, 200);
+      },
+    },
+  );
+
+  assert.equal(fetchCalls, 1);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    message:
+      "If the address belongs to the owner account, a password reset email will arrive shortly. Check the inbox and spam folder.",
+  });
+});
+
+test("password reset transport failure returns a safe retry-later response", async () => {
+  const logs: string[] = [];
+  const response = await handlePasswordRecoveryRequest(
+    recoveryRequest("/api/admin/password-recovery", { email: OWNER_EMAIL }),
+    env,
+    {
+      logger: { error: (message) => logs.push(message) },
+      fetchImpl: async () => {
+        throw new Error(`private network detail for ${OWNER_EMAIL}`);
+      },
+    },
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 503);
+  assert.match(body.error.message, /couldn't process the password reset request/i);
+  assert.equal(
+    logs[0],
+    "[admin] Supabase recovery request failed before receiving a response.",
+  );
+  assert.doesNotMatch(logs.join("\n"), /private network detail|corne\.dawson/);
+});
+
+test("password reset uses the current trusted Cloudflare preview host without per-preview configuration", async () => {
+  const previewEnv: Env = {
+    SUPABASE_URL: env.SUPABASE_URL,
+    SUPABASE_PUBLISHABLE_KEY: env.SUPABASE_PUBLISHABLE_KEY,
+  };
+  const previewUrl =
+    "https://a110bed2.cottage44-menu-pages.pages.dev/api/admin/password-recovery";
+  let fetchCalls = 0;
+  let resetRedirect = "";
+  const response = await handlePasswordRecoveryRequest(
+    recoveryRequest("/api/admin/password-recovery", { email: OWNER_EMAIL }, previewUrl),
+    previewEnv,
+    {
+      fetchImpl: async (input) => {
+        fetchCalls += 1;
+        resetRedirect =
+          new URLSearchParams(new URL(String(input)).search).get("redirect_to") ?? "";
+        return jsonResponse({});
+      },
+    },
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(fetchCalls, 1);
+  assert.equal(
+    resetRedirect,
+    "https://a110bed2.cottage44-menu-pages.pages.dev/api/admin/password-recovery/verify",
+  );
+});
+
+test("password recovery fails safely for unconfigured custom hosts without contacting Supabase", async () => {
+  const previewEnv: Env = {
+    SUPABASE_URL: env.SUPABASE_URL,
+    SUPABASE_PUBLISHABLE_KEY: env.SUPABASE_PUBLISHABLE_KEY,
+  };
+  let fetchCalls = 0;
+  const response = await handlePasswordRecoveryRequest(
+    recoveryRequest(
+      "/api/admin/password-recovery",
+      { email: OWNER_EMAIL },
+      "https://unconfigured.example/api/admin/password-recovery",
+    ),
+    previewEnv,
+    { fetchImpl: async () => { fetchCalls += 1; return jsonResponse({}); } },
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 403);
+  assert.deepEqual(body, { error: "Forbidden." });
+  assert.equal(fetchCalls, 0);
+});
+
+test("password recovery reports missing Supabase configuration with a safe nested error", async () => {
+  const response = await handlePasswordRecoveryRequest(
+    recoveryRequest(
+      "/api/admin/password-recovery",
+      { email: OWNER_EMAIL },
+      "https://a110bed2.cottage44-menu-pages.pages.dev/api/admin/password-recovery",
+    ),
+    {},
+    {
+      logger: { error() {} },
+      fetchImpl: async () => { throw new Error("Should not call Supabase"); },
+    },
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 503);
+  assert.deepEqual(body, {
+    error: {
+      code: "SERVICE_UNAVAILABLE",
+      message: "The service is temporarily unavailable.",
+    },
+  });
+});
+
+test("recovery verification exchanges Supabase's recovery OTP server-side and sets a short HttpOnly cookie", async () => {
+  let upstreamUrl = "";
+  let upstreamBody: unknown;
+  const response = await handlePasswordRecoveryVerification(
+    new Request(
+      "https://menu.example/api/admin/password-recovery/verify?token_hash=opaque-hash&type=recovery",
+    ),
+    env,
+    {
+      fetchImpl: async (input, init) => {
+        upstreamUrl = String(input);
+        upstreamBody = JSON.parse(String(init?.body));
+        return jsonResponse({
+          access_token: "recovery-access",
+          refresh_token: "recovery-refresh",
+          user: { email: OWNER_EMAIL },
+        });
+      },
+    },
+  );
+  const cookie = response.headers.get("Set-Cookie") ?? "";
+
+  assert.equal(response.status, 303);
+  assert.equal(response.headers.get("Location"), "https://menu.example/admin/?recovery=ready");
+  assert.equal(response.headers.get("Cache-Control"), "no-store");
+  assert.equal(response.headers.get("Referrer-Policy"), "no-referrer");
+  assert.match(cookie, /^c44_recovery=/);
+  assert.match(cookie, /Path=\/api\/admin\/password-recovery/);
+  assert.match(cookie, /HttpOnly/);
+  assert.match(cookie, /SameSite=Strict/);
+  assert.match(cookie, /Secure/);
+  assert.match(cookie, /Max-Age=600/);
+  assert.equal(upstreamUrl, `${env.SUPABASE_URL}/auth/v1/verify`);
+  assert.deepEqual(upstreamBody, { token_hash: "opaque-hash", type: "recovery" });
+  assert.doesNotMatch(response.headers.get("Location") ?? "", /opaque-hash|access-token/);
+});
+
+test("recovery verification rejects invalid token types and non-owner sessions", async () => {
+  let fetchCalls = 0;
+  const invalidType = await handlePasswordRecoveryVerification(
+    new Request(
+      "https://menu.example/api/admin/password-recovery/verify?token_hash=opaque-hash&type=signup",
+    ),
+    env,
+    { fetchImpl: async () => { fetchCalls += 1; return jsonResponse({}); } },
+  );
+  const wrongOwner = await handlePasswordRecoveryVerification(
+    new Request(
+      "https://menu.example/api/admin/password-recovery/verify?token_hash=opaque-hash&type=recovery",
+    ),
+    env,
+    {
+      fetchImpl: async () => {
+        fetchCalls += 1;
+        return jsonResponse({
+          access_token: "attacker-access",
+          refresh_token: "attacker-refresh",
+          user: { email: "person@example.com" },
+        });
+      },
+    },
+  );
+
+  assert.equal(invalidType.status, 303);
+  assert.equal(invalidType.headers.get("Location"), "https://menu.example/admin/?recovery=invalid");
+  assert.equal(wrongOwner.status, 303);
+  assert.equal(wrongOwner.headers.get("Set-Cookie"), null);
+  assert.equal(fetchCalls, 1);
+});
+
+test("password update revalidates the owner recovery session and clears it after success", async () => {
+  const verified = await handlePasswordRecoveryVerification(
+    new Request(
+      "https://menu.example/api/admin/password-recovery/verify?token_hash=opaque-hash&type=recovery",
+    ),
+    env,
+    {
+      fetchImpl: async () =>
+        jsonResponse({
+          access_token: "recovery-access",
+          refresh_token: "recovery-refresh",
+          user: { email: OWNER_EMAIL },
+        }),
+    },
+  );
+  const cookie = verified.headers.get("Set-Cookie")?.split(";")[0] ?? "";
+  const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+  const update = await handlePasswordRecoveryUpdate(
+    new Request("https://menu.example/api/admin/password-recovery/update", {
+      method: "POST",
+      headers: {
+        Origin: "https://menu.example",
+        Cookie: cookie,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ password: "new-owner-password" }),
+    }),
+    env,
+    {
+      fetchImpl: async (input, init) => {
+        calls.push({
+          url: String(input),
+          method: init?.method ?? "GET",
+          ...(init?.body ? { body: JSON.parse(String(init.body)) } : {}),
+        });
+        if (String(input).endsWith("/auth/v1/user") && !init?.method) {
+          return jsonResponse({ email: OWNER_EMAIL });
+        }
+        return jsonResponse({ id: "owner-user" });
+      },
+    },
+  );
+
+  assert.equal(update.status, 200);
+  assert.deepEqual(await update.json(), { updated: true });
+  assert.match(update.headers.get("Set-Cookie") ?? "", /Max-Age=0/);
+  assert.deepEqual(calls, [
+    {
+      url: `${env.SUPABASE_URL}/auth/v1/user`,
+      method: "GET",
+    },
+    {
+      url: `${env.SUPABASE_URL}/auth/v1/user`,
+      method: "PUT",
+      body: { password: "new-owner-password" },
+    },
+  ]);
+});
+
+test("password update refuses expired recovery sessions before contacting the user update endpoint", async () => {
+  let updateCalled = false;
+  const response = await handlePasswordRecoveryUpdate(
+    new Request("https://menu.example/api/admin/password-recovery/update", {
+      method: "POST",
+      headers: {
+        Origin: "https://menu.example",
+        Cookie: "c44_recovery=invalid",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ password: "new-owner-password" }),
+    }),
+    env,
+    {
+      fetchImpl: async (input) => {
+        if (String(input).endsWith("/auth/v1/user")) {
+          return jsonResponse({ error: "expired" }, 401);
+        }
+        updateCalled = true;
+        return jsonResponse({});
+      },
+    },
+  );
+
+  assert.equal(response.status, 401);
+  assert.match((await response.json()).error, /reset link has expired/i);
+  assert.match(response.headers.get("Set-Cookie") ?? "", /Max-Age=0/);
+  assert.equal(updateCalled, false);
+});
+
+test("recovery endpoints reject an unapproved site origin", async () => {
+  let fetchCalled = false;
+  const response = await handlePasswordRecoveryRequest(
+    new Request("https://attacker.example/api/admin/password-recovery", {
+      method: "POST",
+      headers: {
+        Origin: "https://attacker.example",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email: OWNER_EMAIL }),
+    }),
+    env,
+    { fetchImpl: async () => { fetchCalled = true; return jsonResponse({}); } },
+  );
+
+  assert.equal(response.status, 403);
+  assert.equal(fetchCalled, false);
 });
 
 test("a remembered session keeps its 30-day cookie when Supabase refreshes tokens", async () => {
