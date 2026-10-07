@@ -25,6 +25,10 @@ For local API development, install dependencies with `npm ci`, copy
 project URL and publishable key. Start Pages locally with `npm run dev`.
 `.dev.vars` is ignored by Git and must not be committed. The admin UI and API
 require Cloudflare Pages; GitHub Pages serves only the static menu.
+Owner password resets use Supabase's one-time recovery email. Configure
+`ADMIN_SITE_URL` for each Pages environment and the exact Supabase redirect
+URLs and recovery email template as described in
+[the setup notes](docs/architecture.md#local-setup-and-manual-account-steps).
 
 ## GitHub Pages
 

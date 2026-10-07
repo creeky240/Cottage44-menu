@@ -1,11 +1,20 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex, nofollow">
-    <meta name="theme-color" content="#f7f5ef">
+    <meta name="theme-color" content="#1c1a1a">
     <title>Owner admin — Cottage 44</title>
+    <script>
+      const savedTheme = localStorage.getItem("cottage44-theme");
+      const initialTheme = savedTheme === "dark" || savedTheme === "light"
+        ? savedTheme
+        : "dark";
+      document.documentElement.dataset.theme = initialTheme;
+      document.querySelector('meta[name="theme-color"]').content =
+        initialTheme === "dark" ? "#1c1a1a" : "#f7f5ef";
+    </script>
     <link rel="stylesheet" href="admin.css">
     <script src="admin.js" defer></script>
   </head>
@@ -31,6 +40,31 @@
           </label>
           <button class="button" type="submit">Sign in</button>
         </form>
+        <button id="forgot-password" class="text-button" type="button">Forgot your password?</button>
+      </section>
+
+      <section id="recovery-request-panel" class="panel sign-in" aria-labelledby="recovery-request-title" hidden>
+        <h1 id="recovery-request-title">Reset your password</h1>
+        <p>Enter your email and we’ll send a password reset link if it matches the owner account.</p>
+        <form id="recovery-request-form">
+          <label for="recovery-email">Email</label>
+          <input id="recovery-email" name="email" type="email" autocomplete="username" required>
+          <button class="button" type="submit">Email me a reset link</button>
+        </form>
+        <button id="back-to-sign-in" class="text-button" type="button">Back to sign in</button>
+      </section>
+
+      <section id="password-reset-panel" class="panel sign-in" aria-labelledby="password-reset-title" hidden>
+        <h1 id="password-reset-title">Choose a new password</h1>
+        <p>Enter the new password you’d like to use for the owner account.</p>
+        <form id="password-reset-form">
+          <label for="new-password">New password</label>
+          <input id="new-password" name="newPassword" type="password" autocomplete="new-password" minlength="8" maxlength="256" required>
+          <label for="confirm-password">Enter it again</label>
+          <input id="confirm-password" name="confirmPassword" type="password" autocomplete="new-password" minlength="8" maxlength="256" required>
+          <button class="button" type="submit">Save new password</button>
+        </form>
+        <button id="back-from-password-reset" class="text-button" type="button">Back to sign in</button>
       </section>
 
       <div id="dashboard" hidden>

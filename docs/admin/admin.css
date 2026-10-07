@@ -1,4 +1,17 @@
 :root {
+  color-scheme: dark;
+  --page: #1c1a1a;
+  --surface: #272425;
+  --ink: #f4eeee;
+  --muted: #c0b8b8;
+  --line: #443d3e;
+  --accent: #ff7777;
+  font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif;
+  color: var(--ink);
+  background: var(--page);
+}
+
+:root[data-theme="light"] {
   color-scheme: light;
   --page: #f7f5ef;
   --surface: #fffefa;
@@ -6,9 +19,6 @@
   --muted: #6b6566;
   --line: #e5e1d6;
   --accent: #c32025;
-  font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif;
-  color: var(--ink);
-  background: var(--page);
 }
 
 * {
@@ -161,9 +171,9 @@ select {
   width: 100%;
   min-height: 2.8rem;
   padding: 0.65rem 0.75rem;
-  border: 1px solid #aaa3a0;
+  border: 1px solid #777173;
   border-radius: 0.45rem;
-  background: white;
+  background: var(--page);
   color: var(--ink);
 }
 
@@ -209,6 +219,23 @@ a:focus-visible {
   color: var(--ink);
 }
 
+.text-button {
+  display: inline-block;
+  margin-top: 1rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.text-button:hover {
+  color: var(--accent);
+}
+
 .inline-form {
   display: flex;
   align-items: center;
@@ -227,12 +254,12 @@ a:focus-visible {
 }
 
 .status[data-kind="error"] {
-  color: #a3161b;
+  color: var(--accent);
   font-weight: 650;
 }
 
 .status[data-kind="success"] {
-  color: #27633f;
+  color: #73c995;
   font-weight: 650;
 }
 

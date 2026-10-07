@@ -3,6 +3,13 @@
 const statusElement = document.querySelector("#status");
 const signInPanel = document.querySelector("#sign-in-panel");
 const signInForm = document.querySelector("#sign-in-form");
+const recoveryRequestPanel = document.querySelector("#recovery-request-panel");
+const recoveryRequestForm = document.querySelector("#recovery-request-form");
+const passwordResetPanel = document.querySelector("#password-reset-panel");
+const passwordResetForm = document.querySelector("#password-reset-form");
+const forgotPasswordButton = document.querySelector("#forgot-password");
+const backToSignInButton = document.querySelector("#back-to-sign-in");
+const backFromPasswordResetButton = document.querySelector("#back-from-password-reset");
 const dashboard = document.querySelector("#dashboard");
 const signOutButton = document.querySelector("#sign-out");
 const plateForm = document.querySelector("#plate-form");
@@ -54,7 +61,11 @@ async function apiRequest(path, options = {}) {
     throw new Error("The server returned an unreadable response.");
   }
   if (!response.ok) {
-    if (response.status === 401) {
+    const method = options.method ?? "GET";
+    const requiresSession = path === "/api/admin/session"
+      ? method !== "POST" && method !== "DELETE"
+      : !path.startsWith("/api/admin/password-recovery");
+    if (response.status === 401 && requiresSession) {
       showSignedOut();
       throw new Error("Your session expired. Please sign in again.");
     }
@@ -66,6 +77,8 @@ async function apiRequest(path, options = {}) {
 function showSignedOut() {
   dashboard.hidden = true;
   signOutButton.hidden = true;
+  recoveryRequestPanel.hidden = true;
+  passwordResetPanel.hidden = true;
   signInPanel.hidden = false;
 }
 
@@ -231,6 +244,7 @@ async function uploadSelectedImage() {
   if (!response.ok) {
     if (response.status === 401) {
       showSignedOut();
+      throw new Error("Your session expired. Please sign in again.");
     }
     throw new Error(body.error || "The image could not be uploaded.");
   }
@@ -273,6 +287,69 @@ signInForm.addEventListener("submit", async (event) => {
     signInForm.reset();
     setStatus("Signed in.", "success");
     await showDashboard();
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+});
+
+forgotPasswordButton.addEventListener("click", () => {
+  signInPanel.hidden = true;
+  recoveryRequestPanel.hidden = false;
+  document.querySelector("#recovery-email").value =
+    document.querySelector("#email").value;
+  document.querySelector("#recovery-email").focus();
+  setStatus("");
+});
+
+backToSignInButton.addEventListener("click", () => {
+  recoveryRequestPanel.hidden = true;
+  signInPanel.hidden = false;
+  document.querySelector("#email").focus();
+  setStatus("");
+});
+
+recoveryRequestForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  setStatus("Sending password reset email…");
+  const email = new FormData(recoveryRequestForm).get("email");
+  try {
+    const result = await apiRequest("/api/admin/password-recovery", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+    setStatus(result.message, "success");
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+});
+
+backFromPasswordResetButton.addEventListener("click", () => {
+  passwordResetPanel.hidden = true;
+  signInPanel.hidden = false;
+  document.querySelector("#email").focus();
+  setStatus("");
+});
+
+passwordResetForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const formData = new FormData(passwordResetForm);
+  const password = formData.get("newPassword");
+  if (password !== formData.get("confirmPassword")) {
+    setStatus("Those passwords do not match. Please enter them again.", "error");
+    document.querySelector("#confirm-password").focus();
+    return;
+  }
+  setStatus("Updating your password…");
+  try {
+    await apiRequest("/api/admin/password-recovery/update", {
+      method: "POST",
+      body: JSON.stringify({ password }),
+    });
+    passwordResetForm.reset();
+    passwordResetPanel.hidden = true;
+    signInPanel.hidden = false;
+    setStatus("Your password has been updated. Please sign in with your new password.", "success");
+    document.querySelector("#email").focus();
   } catch (error) {
     setStatus(error.message, "error");
   }
@@ -353,6 +430,20 @@ cancelEditButton.addEventListener("click", resetForm);
 
 async function initialize() {
   document.querySelector("#email").value = "corne.dawson@gmail.com";
+  document.querySelector("#recovery-email").value = "corne.dawson@gmail.com";
+  const recovery = new URLSearchParams(window.location.search).get("recovery");
+  if (recovery) {
+    window.history.replaceState(null, "", window.location.pathname);
+    if (recovery === "ready") {
+      signInPanel.hidden = true;
+      passwordResetPanel.hidden = false;
+      document.querySelector("#new-password").focus();
+      setStatus("Reset link verified. Choose a new password of at least 8 characters.");
+      return;
+    }
+    setStatus("That password reset link is invalid or has expired. Request a new one.", "error");
+    return;
+  }
   try {
     const session = await apiRequest("/api/admin/session");
     if (session.authenticated) {

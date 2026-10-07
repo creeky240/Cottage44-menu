@@ -554,6 +554,19 @@ a {
   font-size: 0.8rem;
 }
 
+.site-footer__admin {
+  margin-bottom: 0.8rem;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.site-footer__admin:hover,
+.site-footer__admin:focus-visible {
+  color: var(--accent);
+}
+
 .payment-notes {
   display: flex;
   align-items: center;

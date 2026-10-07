@@ -76,6 +76,14 @@ authenticated owner session. A checked **Remember me** choice (default) gives
 the cookie a 30-day lifetime; unchecked sessions use a browser-session cookie
 without a persistent expiry.
 Supabase refresh responses preserve the selected duration.
+Password reset requests return the same response for every email and only
+send mail to the configured owner. The reset email's one-time token hash is
+exchanged by a Pages Function; after it verifies the owner with Supabase, a
+short-lived `HttpOnly` recovery cookie is set. The password update validates
+that cookie against Supabase again before updating the password. Neither
+recovery tokens nor session tokens are exposed to browser JavaScript or
+stored in local storage. Supabase Auth's email rate limits apply to reset
+requests.
 
 The server accepts only `corne.dawson@gmail.com`, verified against the
 Supabase Auth user email on sign-in and on every request. It does not trust
@@ -208,3 +216,27 @@ References checked 7 October 2026:
    Functions. This work has not created a Pages project, deployed, or changed
    DNS. The runtime configuration values have not been supplied or written
    into this repository.
+7. In Cloudflare Pages **Settings → Variables and Secrets**, also set the
+   non-secret `ADMIN_SITE_URL` binding to the exact origin for each
+   environment (no trailing path): Production
+   `https://menu.cottage44.co.za`; Preview
+   `https://dev.cottage44-menu-pages.pages.dev`. For local Pages, use
+   `http://127.0.0.1:8788`.
+8. In Supabase **Authentication → URL Configuration**, set **Site URL** to
+   `https://menu.cottage44.co.za` and add these exact entries under
+   **Redirect URLs**:
+   `https://menu.cottage44.co.za/api/admin/password-recovery/verify` and
+   `https://dev.cottage44-menu-pages.pages.dev/api/admin/password-recovery/verify`.
+   Add `http://127.0.0.1:8788/api/admin/password-recovery/verify` only for
+   local development.
+9. In Supabase **Authentication → Email Templates → Reset Password**, make
+   the reset link point to the redirect URL with the one-time token hash,
+   rather than the default confirmation URL:
+
+   ```html
+   <a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&amp;type=recovery">Reset password</a>
+   ```
+
+   The function verifies this recovery token and owner account before it
+   displays the new-password form. The email URL is one-time; if it expires,
+   request another reset email.
