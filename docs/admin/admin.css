@@ -5,7 +5,7 @@
   --ink: #f4eeee;
   --muted: #c0b8b8;
   --line: #443d3e;
-  --accent: #ff7777;
+  --accent: #C12025;
   font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif;
   color: var(--ink);
   background: var(--page);
@@ -18,7 +18,7 @@
   --ink: #2c2a2a;
   --muted: #6b6566;
   --line: #e5e1d6;
-  --accent: #c32025;
+  --accent: #C12025;
 }
 
 * {

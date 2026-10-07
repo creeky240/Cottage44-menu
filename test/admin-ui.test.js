@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const adminHtml = await readFile(path.join(root, "docs/admin/index.html"), "utf8");
+const adminCss = await readFile(path.join(root, "docs/admin/admin.css"), "utf8");
 const adminScript = await readFile(path.join(root, "docs/admin/admin.js"), "utf8");
 
 function initialAdminTheme(storedTheme = null) {
@@ -67,6 +68,11 @@ test("admin theme defaults to dark and respects a saved shared theme", () => {
   assert.deepEqual(initialAdminTheme("light"), { theme: "light", themeColor: "#f7f5ef" });
   assert.deepEqual(initialAdminTheme("dark"), { theme: "dark", themeColor: "#1c1a1a" });
   assert.match(adminHtml, /localStorage\.getItem\("cottage44-theme"\)/);
+});
+
+test("uses the exact Cottage 44 red accent in admin light and dark themes", () => {
+  assert.match(adminCss, /--accent:\s*#C12025;/);
+  assert.match(adminCss, /:root\[data-theme="light"\][\s\S]*?--accent:\s*#C12025;/);
 });
 
 class Element {

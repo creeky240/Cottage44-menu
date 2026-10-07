@@ -79,7 +79,6 @@ distributed under the SIL Open Font License 1.1; see
 
 The brand palette lives at the top of `docs/styles.css` in the `--brand-*`
 tokens: charcoal `--brand-primary` (`#2c2a2a`) and red `--brand-accent`
-(`#c32025`). Components should use the semantic `--color-*` tokens instead of
-hard-coding colors. Dark mode uses readable text and accent variants while the
-canonical brand tokens remain unchanged. Update the brand tokens in one place
-to change the palette consistently across the site.
+(`#C12025`). Components should use the semantic `--color-*` tokens instead of
+hard-coding colors. Both light and dark themes use the same brand accent,
+including on the owner admin page.
