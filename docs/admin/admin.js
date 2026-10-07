@@ -1,12 +1,15 @@
 "use strict";
 
 const statusElement = document.querySelector("#status");
+const signInSubmit = document.querySelector("#sign-in-submit");
 const signInPanel = document.querySelector("#sign-in-panel");
 const signInForm = document.querySelector("#sign-in-form");
 const recoveryRequestPanel = document.querySelector("#recovery-request-panel");
 const recoveryRequestForm = document.querySelector("#recovery-request-form");
+const recoverySubmit = document.querySelector("#recovery-submit");
 const passwordResetPanel = document.querySelector("#password-reset-panel");
 const passwordResetForm = document.querySelector("#password-reset-form");
+const passwordResetSubmit = document.querySelector("#password-reset-submit");
 const forgotPasswordButton = document.querySelector("#forgot-password");
 const backToSignInButton = document.querySelector("#back-to-sign-in");
 const backFromPasswordResetButton = document.querySelector("#back-from-password-reset");
@@ -33,6 +36,7 @@ const cancelEditButton = document.querySelector("#cancel-edit");
 const scheduleDateInput = document.querySelector("#schedule-date");
 const scheduleSelect = document.querySelector("#schedule-select");
 const saveScheduleButton = document.querySelector("#save-schedule");
+const savePlateButton = document.querySelector("#save-plate");
 const scheduleSummary = document.querySelector("#schedule-summary");
 const weeklyPlanList = document.querySelector("#weekly-plan-list");
 
@@ -52,10 +56,29 @@ const SOURCE_IMAGE_TYPES = new Set([
 ]);
 
 function setStatus(message, kind = "") {
-  statusElement.textContent = typeof message === "string"
+  const text = typeof message === "string"
     ? message
     : "The request could not be completed. Please try again.";
+  statusElement.textContent = text;
   statusElement.dataset.kind = kind;
+  statusElement.hidden = !text;
+  statusElement.setAttribute("aria-live", kind === "error" ? "assertive" : "polite");
+}
+
+function beginBusy(button, label) {
+  if (button.disabled) {
+    return false;
+  }
+  button.disabled = true;
+  button.dataset.originalLabel = button.textContent;
+  button.textContent = label;
+  return true;
+}
+
+function endBusy(button) {
+  button.disabled = false;
+  button.textContent = button.dataset.originalLabel || button.textContent;
+  delete button.dataset.originalLabel;
 }
 
 function apiErrorMessage(body, fallback) {
@@ -270,8 +293,12 @@ function renderWeeklyPlan() {
     button.className = "button button--secondary";
     button.textContent = "Save";
     button.addEventListener("click", async () => {
+      if (!beginBusy(button, "Saving…")) {
+        return;
+      }
       if (!select.value) {
         setStatus("Choose a saved plate for this day first.", "error");
+        endBusy(button);
         return;
       }
       setStatus(`Saving the plate for ${label.textContent}…`);
@@ -283,7 +310,9 @@ function renderWeeklyPlan() {
         await loadDashboard();
         setStatus(`${result.today.plate.name} planned for ${date}.`, "success");
       } catch (error) {
-        setStatus(error.message, "error");
+        setStatus(`Could not save ${label.textContent}. ${error.message}`, "error");
+      } finally {
+        endBusy(button);
       }
     });
     row.append(label, select, button);
@@ -339,8 +368,12 @@ async function loadDashboard() {
   scheduleSelect.addEventListener("change", updateScheduleSummary);
 
   saveScheduleButton.addEventListener("click", async () => {
+    if (!beginBusy(saveScheduleButton, "Saving…")) {
+      return;
+    }
     if (!scheduleDateInput.value || !scheduleSelect.value) {
       setStatus("Choose a date and saved plate first.", "error");
+      endBusy(saveScheduleButton);
       return;
     }
     setStatus("Saving the planned plate…");
@@ -355,7 +388,9 @@ async function loadDashboard() {
       await loadDashboard();
       setStatus(`${result.today.plate.name} planned for ${result.today.serviceDate}.`, "success");
     } catch (error) {
-      setStatus(error.message, "error");
+      setStatus(`Could not save ${scheduleDateInput.value}. ${error.message}`, "error");
+    } finally {
+      endBusy(saveScheduleButton);
     }
   });
 }
@@ -534,6 +569,10 @@ async function deletePlate(plate) {
   if (!window.confirm(`Delete “${plate.name}”? Saved history will prevent deletion.`)) {
     return;
   }
+  const deleteButton = document.querySelector(`[aria-label="Delete ${plate.name}"]`);
+  if (deleteButton && !beginBusy(deleteButton, "Deleting…")) {
+    return;
+  }
   setStatus(`Deleting ${plate.name}…`);
   try {
     await apiRequest(`/api/admin/plates/${encodeURIComponent(plate.id)}`, {
@@ -546,13 +585,19 @@ async function deletePlate(plate) {
     renderPlateList();
     setStatus("Plate deleted.", "success");
   } catch (error) {
-    console.error("dashboard load failed", error);
     setStatus(error.message, "error");
+  } finally {
+    if (deleteButton) {
+      endBusy(deleteButton);
+    }
   }
 }
 
 signInForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (!beginBusy(signInSubmit, "Signing in…")) {
+    return;
+  }
   setStatus("Signing in…");
   const formData = new FormData(signInForm);
   try {
@@ -569,6 +614,8 @@ signInForm.addEventListener("submit", async (event) => {
     await showDashboard();
   } catch (error) {
     setStatus(error.message, "error");
+  } finally {
+    endBusy(signInSubmit);
   }
 });
 
@@ -590,6 +637,9 @@ backToSignInButton.addEventListener("click", () => {
 
 recoveryRequestForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (!beginBusy(recoverySubmit, "Sending…")) {
+    return;
+  }
   setStatus("Sending password reset email…");
   const email = new FormData(recoveryRequestForm).get("email");
   try {
@@ -605,6 +655,8 @@ recoveryRequestForm.addEventListener("submit", async (event) => {
     );
   } catch (error) {
     setStatus(error.message, "error");
+  } finally {
+    endBusy(recoverySubmit);
   }
 });
 
@@ -624,6 +676,9 @@ passwordResetForm.addEventListener("submit", async (event) => {
     document.querySelector("#confirm-password").focus();
     return;
   }
+  if (!beginBusy(passwordResetSubmit, "Saving…")) {
+    return;
+  }
   setStatus("Updating your password…");
   try {
     await apiRequest("/api/admin/password-recovery/update", {
@@ -637,26 +692,37 @@ passwordResetForm.addEventListener("submit", async (event) => {
     document.querySelector("#email").focus();
   } catch (error) {
     setStatus(error.message, "error");
+  } finally {
+    endBusy(passwordResetSubmit);
   }
 });
 
 signOutButton.addEventListener("click", async () => {
+  if (!beginBusy(signOutButton, "Signing out…")) {
+    return;
+  }
   try {
     await apiRequest("/api/admin/session", { method: "DELETE" });
     showSignedOut();
     setStatus("Signed out.", "success");
   } catch (error) {
     setStatus(error.message, "error");
+  } finally {
+    endBusy(signOutButton);
   }
 });
 
 plateForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (!beginBusy(savePlateButton, "Saving…")) {
+    return;
+  }
   const price = Number(priceInput.value);
   const priceCents = Math.round(price * 100);
   if (!Number.isFinite(price) || price < 0 || Math.abs(priceCents / 100 - price) > 0.000001) {
     setStatus("Enter a valid price with no more than two decimal places.", "error");
     priceInput.focus();
+    endBusy(savePlateButton);
     return;
   }
 
@@ -682,13 +748,19 @@ plateForm.addEventListener("submit", async (event) => {
     setStatus(`${saved.plate.name} saved.`, "success");
   } catch (error) {
     setStatus(error.message, "error");
+  } finally {
+    endBusy(savePlateButton);
   }
 });
 
 setTodayButton.addEventListener("click", async () => {
+  if (!beginBusy(setTodayButton, "Saving…")) {
+    return;
+  }
   if (!todaySelect.value) {
     setStatus("Choose a saved plate first.", "error");
     todaySelect.focus();
+    endBusy(setTodayButton);
     return;
   }
   setStatus("Setting today’s plate…");
@@ -703,6 +775,8 @@ setTodayButton.addEventListener("click", async () => {
     await loadDashboard();
   } catch (error) {
     setStatus(error.message, "error");
+  } finally {
+    endBusy(setTodayButton);
   }
 });
 

@@ -25,7 +25,7 @@
       <button id="sign-out" class="button button--quiet" type="button" hidden>Sign out</button>
     </header>
     <main id="main">
-      <p id="status" class="status" role="status" aria-live="polite"></p>
+      <div id="status" class="status" role="status" aria-live="polite" aria-atomic="true" hidden></div>
       <section id="sign-in-panel" class="panel sign-in" aria-labelledby="sign-in-title">
         <h1 id="sign-in-title">Owner sign in</h1>
         <p>Sign in with the owner account to manage today’s plate.</p>
@@ -38,7 +38,7 @@
             <input id="remember-me" name="rememberMe" type="checkbox" checked>
             Remember me for 30 days
           </label>
-          <button class="button" type="submit">Sign in</button>
+          <button id="sign-in-submit" class="button" type="submit">Sign in</button>
         </form>
         <button id="forgot-password" class="text-button" type="button">Forgot your password?</button>
       </section>
@@ -49,7 +49,7 @@
         <form id="recovery-request-form">
           <label for="recovery-email">Email</label>
           <input id="recovery-email" name="email" type="email" autocomplete="username" required>
-          <button class="button" type="submit">Email me a reset link</button>
+          <button id="recovery-submit" class="button" type="submit">Email me a reset link</button>
         </form>
         <button id="back-to-sign-in" class="text-button" type="button">Back to sign in</button>
       </section>
@@ -62,7 +62,7 @@
           <input id="new-password" name="newPassword" type="password" autocomplete="new-password" minlength="8" maxlength="256" required>
           <label for="confirm-password">Enter it again</label>
           <input id="confirm-password" name="confirmPassword" type="password" autocomplete="new-password" minlength="8" maxlength="256" required>
-          <button class="button" type="submit">Save new password</button>
+          <button id="password-reset-submit" class="button" type="submit">Save new password</button>
         </form>
         <button id="back-from-password-reset" class="text-button" type="button">Back to sign in</button>
       </section>
@@ -108,7 +108,7 @@
               <button id="clear-image" class="button button--quiet" type="button">Clear selected photo</button>
             </div>
             <div class="inline-form">
-              <button class="button" type="submit">Save plate details</button>
+                  <button id="save-plate" class="button" type="submit">Save plate details</button>
               <button id="cancel-edit" class="button button--quiet" type="button" hidden>Cancel edit</button>
             </div>
           </form>
@@ -134,15 +134,15 @@
           <div id="weekly-plan-list" class="weekly-plan-list" aria-live="polite"></div>
         </section>
 
-        <section class="panel" aria-labelledby="saved-title">
-          <h2 id="saved-title">Saved plates</h2>
+        <details class="panel collapsible">
+          <summary><span><span class="eyebrow">Step 4</span><strong id="saved-title">Saved plates</strong></span><span class="summary-hint">Reuse or edit</span></summary>
           <ul id="plate-list" class="plate-list"></ul>
-        </section>
+        </details>
 
-        <section class="panel" aria-labelledby="history-title">
-          <h2 id="history-title">Recent history</h2>
+        <details class="panel collapsible">
+          <summary><span><span class="eyebrow">Step 5</span><strong id="history-title">Recent history</strong></span><span class="summary-hint">Past dates</span></summary>
           <ol id="history-list" class="history-list"></ol>
-        </section>
+        </details>
       </div>
     </main>
   </body>

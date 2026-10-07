@@ -839,6 +839,34 @@ test("owner planning rejects dates beyond the one-year window", async () => {
   assert.equal(databaseCalled, false);
 });
 
+test("future assignment failures explain the date without exposing provider details", async () => {
+  const baseRequest = sessionRequest(false, "https://menu.example/api/admin/plates/today");
+  const request = new Request(baseRequest.url, {
+    method: "POST",
+    headers: {
+      Origin: "https://menu.example",
+      Cookie: baseRequest.headers.get("Cookie") ?? "",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      serviceDate: "2026-10-08",
+      plateId: "8d2b48f2-7932-4ff0-9e80-7ac5efc438f0",
+    }),
+  });
+  const response = await handleTodayAdminRequest(request, env, {
+    fetchImpl: async (input) => {
+      if (String(input).endsWith("/auth/v1/user")) {
+        return jsonResponse({ email: OWNER_EMAIL });
+      }
+      return jsonResponse({ message: "permission denied: secret provider detail" }, 403);
+    },
+  }, new Date("2026-10-07T00:00:00.000Z"));
+  assert.equal(response.status, 502);
+  assert.deepEqual(await response.json(), {
+    error: "The plate for 2026-10-08 could not be saved. Please try again.",
+  });
+});
+
 test("owner plate creation forwards validated fields with the Supabase user token", async () => {
   const baseRequest = sessionRequest(false, "https://menu.example/api/admin/plates");
   const request = new Request(baseRequest.url, {

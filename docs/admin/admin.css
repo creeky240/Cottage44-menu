@@ -85,7 +85,7 @@ textarea {
 main {
   display: grid;
   width: min(100% - 2rem, 880px);
-  gap: 1rem;
+  gap: 1.35rem;
   margin: 2rem auto 4rem;
 }
 
@@ -95,6 +95,54 @@ main {
   border-radius: 0.9rem;
   background: var(--surface);
   box-shadow: 0 12px 35px rgb(43 53 42 / 6%);
+}
+
+.collapsible {
+  padding: 0;
+  overflow: hidden;
+}
+
+.collapsible summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem clamp(1.1rem, 4vw, 1.7rem);
+  cursor: pointer;
+  list-style: none;
+}
+
+.collapsible summary::-webkit-details-marker {
+  display: none;
+}
+
+.collapsible summary::after {
+  content: "+";
+  color: var(--accent);
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.collapsible[open] summary::after {
+  content: "−";
+}
+
+.collapsible summary strong,
+.summary-hint {
+  display: block;
+}
+
+.summary-hint {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.collapsible > :not(summary) {
+  margin-inline: clamp(1.1rem, 4vw, 1.7rem);
+}
+
+.collapsible > :last-child {
+  margin-bottom: 1.35rem;
 }
 
 h1,
@@ -279,17 +327,28 @@ a:focus-visible {
 }
 
 .status {
-  min-height: 1.4em;
-  margin: 0;
+  position: fixed;
+  z-index: 10;
+  top: 1rem;
+  left: 50%;
+  width: min(calc(100% - 2rem), 38rem);
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.65rem;
+  background: var(--surface);
+  box-shadow: 0 12px 30px rgb(0 0 0 / 22%);
   color: var(--muted);
+  transform: translateX(-50%);
 }
 
 .status[data-kind="error"] {
+  border-color: var(--accent);
   color: var(--accent);
   font-weight: 650;
 }
 
 .status[data-kind="success"] {
+  border-color: #73c995;
   color: #73c995;
   font-weight: 650;
 }

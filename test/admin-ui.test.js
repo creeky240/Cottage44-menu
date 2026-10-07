@@ -31,10 +31,13 @@ const adminSelectors = [
   "#status",
   "#sign-in-panel",
   "#sign-in-form",
+  "#sign-in-submit",
   "#recovery-request-panel",
   "#recovery-request-form",
+  "#recovery-submit",
   "#password-reset-panel",
   "#password-reset-form",
+  "#password-reset-submit",
   "#forgot-password",
   "#back-to-sign-in",
   "#back-from-password-reset",
@@ -61,6 +64,7 @@ const adminSelectors = [
   "#set-today",
   "#new-plate",
   "#cancel-edit",
+  "#save-plate",
   "#editor-title",
   "#email",
   "#schedule-date",
@@ -142,6 +146,8 @@ test("admin UI remembers by default and completes sign-in, upload, save, and tod
   let todaysPlate = null;
   let failSignIn = true;
   let failImageUpload = false;
+  let holdAssignment = false;
+  let resolveAssignment;
   const imageUrl =
     "https://cottage44-test.supabase.co/storage/v1/object/public/cottage44-plates/123e4567-e89b-42d3-a456-426614174000.jpg";
 
@@ -198,12 +204,18 @@ test("admin UI remembers by default and completes sign-in, upload, save, and tod
     if (url === "/api/admin/plates/today" && options.method === "POST") {
       const { plateId } = JSON.parse(options.body);
       todaysPlate = savedPlates.find((plate) => plate.id === plateId);
-      return Response.json({
+      const response = Response.json({
         today: {
           serviceDate: "2026-10-07",
           plate: todaysPlate,
         },
       });
+      if (holdAssignment) {
+        return new Promise((resolve) => {
+          resolveAssignment = () => resolve(response);
+        });
+      }
+      return response;
     }
     throw new Error(`Unexpected fake API request: ${options.method ?? "GET"} ${url}`);
   }
@@ -330,6 +342,20 @@ test("admin UI remembers by default and completes sign-in, upload, save, and tod
     plateId: savedPlates[0].id,
   });
   assert.match(elements["#today-summary"].textContent, /Cottage burger/);
+
+  holdAssignment = true;
+  const firstAssignment = elements["#set-today"].listeners.click();
+  const duplicateAssignment = elements["#set-today"].listeners.click();
+  await Promise.resolve();
+  assert.equal(elements["#set-today"].disabled, true);
+  assert.equal(
+    calls.filter(({ url, options }) =>
+      url === "/api/admin/plates/today" && options.method === "POST").length,
+    2,
+  );
+  resolveAssignment();
+  await Promise.all([firstAssignment, duplicateAssignment]);
+  holdAssignment = false;
 
   await elements["#sign-out"].listeners.click();
   elements["#forgot-password"].listeners.click();

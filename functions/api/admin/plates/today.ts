@@ -185,8 +185,12 @@ export async function handleTodayAdminRequest(
     dependencies,
   );
   if (!response?.ok) {
+    dependencies.logger?.error?.(`[admin] Saving the plate for ${serviceDate} failed.`);
     return withCookie(
-      adminFailure(dependencies.logger ?? console, "Setting today's plate failed."),
+      jsonResponse(
+        { error: `The plate for ${serviceDate} could not be saved. Please try again.` },
+        502,
+      ),
       context.cookie,
     );
   }
@@ -204,7 +208,10 @@ export async function handleTodayAdminRequest(
     rows[0].plate.id !== body.plateId
   ) {
     return withCookie(
-      adminFailure(dependencies.logger ?? console, "Today's plate response was invalid."),
+      jsonResponse(
+        { error: `The plate for ${serviceDate} could not be saved. Please try again.` },
+        502,
+      ),
       context.cookie,
     );
   }
