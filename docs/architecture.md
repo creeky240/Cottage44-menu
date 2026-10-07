@@ -216,6 +216,16 @@ Then verify the target project and migration history. The migration job uses
 does not run when no migration file changed. Never create a duplicate SQL
 migration or apply it to an unintended project.
 
+If linking succeeds but `supabase db push` reports PostgreSQL
+**password authentication failed for user postgres**, the configured
+`SUPABASE_DB_PASSWORD` is wrong for the project identified by
+`SUPABASE_PROJECT_REF` (or contains copied whitespace). Replace that
+environment secret with the current database password from the matching
+Supabase project's database settings and rerun the workflow. An access token,
+publishable key, or dashboard login password is not a database password.
+Until `supabase db push` completes successfully, the future-planning policies
+are not confirmed as applied and the release must remain blocked.
+
 Supabase may not know about SQL run directly in its SQL editor. Before
 automation is used, verify in that exact project that both schemas and policies
 from the migrations are already present, then run this one-time history
