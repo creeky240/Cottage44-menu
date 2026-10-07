@@ -157,6 +157,65 @@ deployment should run only after a validated update reaches `main`.
 The PR, administrator-enforcement, conversation-resolution, force-push, and
 deletion protections have been enabled on both branches. The required status context is `checks`, with strict up-to-date checks enabled.
 
+### Automated Supabase migrations
+
+The existing `.github/workflows/ci.yml` detects migration changes on pushes to
+`dev` or `main` after the `checks` job passes. Only when files under
+`supabase/migrations/` changed, the `Apply Supabase migrations` job uses the
+`Cottage44_menu` GitHub environment and Supabase CLI to link the configured
+project and run `supabase db push --linked --yes`. The CLI applies only
+migrations missing from that project's migration history. Existing CI check
+names and the Cloudflare/GitHub Pages deployment configuration are unchanged.
+
+Before the first migration-triggering push, configure the existing GitHub
+environment at **Settings → Environments → Cottage44_menu**:
+
+| Kind | Name | Value |
+| --- | --- | --- |
+| Environment secret | `SUPABASE_ACCESS_TOKEN` | A Supabase personal access token |
+| Environment secret | `SUPABASE_DB_PASSWORD` | The database password for the intended Supabase project |
+| Environment variable | `SUPABASE_PROJECT_REF` | The project reference from that project's Supabase dashboard URL |
+
+The project ref is an identifier, not a credential. Do not put any of these
+values in repository files, workflow YAML, or command output. The secrets and
+variable must point to the existing project where the migrations below were
+already applied manually.
+
+Supabase may not know about SQL run directly in its SQL editor. Before
+automation is used, verify in that exact project that both schemas and policies
+from the migrations are already present, then run this one-time history
+reconciliation from the repository root. It records the two known migrations
+as applied; it does not execute or validate their SQL. Do not run it against a
+different or empty project.
+
+```sh
+read -rsp "Supabase access token: " SUPABASE_ACCESS_TOKEN
+export SUPABASE_ACCESS_TOKEN
+printf '\n'
+read -rsp "Supabase database password: " SUPABASE_DB_PASSWORD
+export SUPABASE_DB_PASSWORD
+printf '\n'
+read -rp "Supabase project ref: " SUPABASE_PROJECT_REF
+export SUPABASE_PROJECT_REF
+
+npx supabase@latest link \
+  --project-ref "$SUPABASE_PROJECT_REF" \
+  --password "$SUPABASE_DB_PASSWORD"
+npx supabase@latest migration repair --status applied \
+  20261007100000 20261007110000 \
+  --linked
+
+unset SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD SUPABASE_PROJECT_REF
+```
+
+The migration versions correspond to
+`20261007100000_create_plates_and_daily_plates.sql` and
+`20261007110000_add_owner_admin_and_plate_images.sql`. The `.temp` CLI link
+state is ignored by Git. After reconciliation, pushes containing new migration
+files to either branch automatically apply pending migrations to the configured
+project. Add future schema changes as new, timestamped SQL migration files;
+editing an already-applied migration does not reapply it to the database.
+
 ## Environment and secrets
 
 The public Supabase URL and publishable/anon key are identifiers intended for
@@ -207,11 +266,12 @@ References checked 7 October 2026:
    email in the dashboard if the project requires confirmation. Do not grant
    access through user-editable metadata. Password resets are managed through
    Supabase Auth.
-3. Review and apply, in order, the migrations
+3. The migrations
    `20261007100000_create_plates_and_daily_plates.sql` and
-   `20261007110000_add_owner_admin_and_plate_images.sql` to the intended
-   project using its SQL editor. The latter creates the bucket and owner-only
-   database/Storage policies. It has not been applied remotely by this work.
+   `20261007110000_add_owner_admin_and_plate_images.sql` have already been
+   applied manually to the existing Supabase project. If setting up automation
+   for that project, follow the one-time migration-history reconciliation
+   above before adding or pushing future migrations.
 4. For local development, run `npm ci`, copy `.env.example` to `.dev.vars`,
    and replace placeholders locally (do not commit the file):
 

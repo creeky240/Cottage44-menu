@@ -62,6 +62,16 @@ coverage by file and branch on the
 dashboard and pull request comments require Codecov's GitHub App to be
 authorized for this repository.
 
+## Supabase migrations
+
+After CI passes on a push to `dev` or `main`, changes under
+`supabase/migrations/` automatically apply pending migrations to the configured
+Supabase project. Before the first such push, configure the GitHub environment
+secrets and project-ref variable, then reconcile the history for the two
+migrations that were already applied manually. See
+[the migration automation setup](docs/architecture.md#automated-supabase-migrations)
+for the exact one-time steps.
+
 GitHub Pages is the current static deployment; Cloudflare Pages is the proposed
 production host. This backend foundation does not deploy Pages or change DNS.
 See [the architecture proposal](docs/architecture.md) for setup status.
