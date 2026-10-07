@@ -24,7 +24,7 @@ For local API development, install dependencies with `npm ci`, copy
 `.env.example` to `.dev.vars`, and replace its placeholders with the Supabase
 project URL and publishable key. Start Pages locally with `npm run dev`.
 `.dev.vars` is ignored by Git and must not be committed. The admin UI and API
-require Cloudflare Pages; GitHub Pages serves only the static menu.
+require Cloudflare Pages.
 Owner password resets use Supabase's one-time recovery email. Configure
 `ADMIN_SITE_URL` for the production custom domain and local development.
 Cloudflare Pages preview origins are resolved from the request only when they
@@ -35,13 +35,30 @@ If a reset email is not delivered, check Supabase SMTP settings and rate
 limits before requesting another: its built-in SMTP is limited to two
 messages per project per hour and only sends to organization-team addresses.
 
-## GitHub Pages
+## Hosting cutover
 
-The static site is in `docs/`, with `docs/index.html` as its entry point.
-In the repository's **Settings → Pages**, set the source to **Deploy from a
-branch**, choose branch `main` and folder `/docs`, then save. The deployed
-`docs/CNAME` preserves the `menu.cottage44.co.za` custom domain. The Actions
-CI workflow checks changes but does not deploy the site.
+The static site and Pages Functions are deployed by Cloudflare Pages from the
+`docs/` source and `functions/` directory. The repository no longer contains a
+`docs/CNAME` file or a GitHub Pages deployment configuration.
+
+The following provider-side actions are still manual and are not performed by
+this repository change:
+
+1. In the repository's **Settings → Pages**, select **Source: GitHub Actions**
+   if Pages is enabled, then disable/remove the Pages deployment and custom
+   domain. If the UI instead shows a branch source, set it to **None** and
+   remove the displayed `menu.cottage44.co.za` custom domain.
+2. In the DNS provider, remove the GitHub Pages `CNAME`/A records for
+   `menu.cottage44.co.za` only after confirming the Cloudflare Pages project is
+   ready to receive the hostname.
+3. In Cloudflare Pages **Custom domains**, add and verify
+   `menu.cottage44.co.za`, then configure the required DNS record there.
+4. Set Cloudflare Pages production branch to `main` and verify
+   `/api/health`, `/api/plates/today`, and `/admin/` on the custom domain.
+
+Do not delete DNS records before the Cloudflare hostname is ready; this PR
+removes repository-owned GitHub Pages wiring but does not change GitHub,
+Cloudflare, DNS, Supabase, passwords, or production data.
 
 ## Continuous integration
 
@@ -65,7 +82,10 @@ authorized for this repository.
 Pull requests into `dev` also receive a Cloudflare Pages preview comment from
 `.github/workflows/cloudflare-preview.yml`. The repository must have
 `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` configured as Actions
-secrets, and the Pages project must be named `cottage44-menu-pages`.
+secrets, and the Pages project must be named `cottage44-menu-pages`. The
+fork-safe workflow downloads only the PR merge ref's static `docs/` files
+through the GitHub API and posts a clickable
+`https://pr-<number>.cottage44-menu-pages.pages.dev` URL.
 
 ## Supabase migrations
 
@@ -98,9 +118,9 @@ settings into the `Cottage44_menu` environment secret, removing any leading
 or trailing whitespace, and rerun the workflow. Do not substitute the
 Supabase access token, publishable key, or dashboard password.
 
-GitHub Pages is the current static deployment; Cloudflare Pages is the proposed
-production host. This backend foundation does not deploy Pages or change DNS.
-See [the architecture proposal](docs/architecture.md) for setup status.
+Cloudflare Pages is the intended production host. This repository does not
+change provider settings or DNS. See [the architecture proposal](docs/architecture.md)
+for the manual cutover checklist.
 
 Menu items and prices are maintained in `docs/menu.js`. The light/dark theme
 preference is stored in the browser.

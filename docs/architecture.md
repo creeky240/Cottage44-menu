@@ -10,12 +10,11 @@ Status: owner workflow implemented; Supabase account setup and hosting remain ma
   plate from the Pages API.
 - Cloudflare Pages Functions provide the public daily-plate API and secured
   owner-management endpoints.
-- GitHub Pages currently publishes `main`/`docs` at
-  `https://menu.cottage44.co.za/`, with HTTPS enforced.
-- GitHub's Pages usage policy says Pages must not be used for a site primarily
-  intended to facilitate commercial transactions. Since this is a restaurant
-  website, the proposed production host is Cloudflare Pages. The Pages project
-  has not been configured or deployed.
+- Cloudflare Pages is the intended production host for both the static menu and
+  Pages Functions.
+- The repository no longer contains a `docs/CNAME` file or a repository-side
+  static-host deployment configuration. Provider settings and DNS remain
+  manual.
 
 ## Proposed architecture
 
@@ -136,18 +135,22 @@ Admin writes only accept public URLs from this bucket.
 - **Production release:** promote reviewed, CI-passing changes from `dev` to
   `main`; only `main` deploys to the production site.
 
-Cloudflare Pages setup and DNS changes are outside this implementation.
+Cloudflare Pages setup and DNS changes are outside this implementation. The
+repository-side cleanup is limited to removing the old `docs/CNAME` mapping and
+using Cloudflare Pages workflows.
 
-### Current external cutover blocker
+### Manual hosting cutover checklist
 
 The verified `dev.cottage44-menu-pages.pages.dev` and
 `cottage44-menu-pages.pages.dev` deployments serve the menu, admin page, and
-JSON Functions correctly. The custom domain `menu.cottage44.co.za` still
-serves GitHub Pages and returns 404 for the API routes, so the owner workflow
-cannot work there yet. This is an external Cloudflare custom-domain/DNS
-cutover task, not an application defect; do not change DNS as part of an app
-code review. Until the cutover is completed, use the Cloudflare Pages URL for
-admin sign-in and API-backed menu data.
+JSON Functions correctly. To complete the cutover, manually disable the
+repository's **Settings → Pages** source and remove its
+`menu.cottage44.co.za` custom-domain entry. Then remove the old GitHub Pages
+DNS records at the DNS provider, add and verify the hostname under Cloudflare
+Pages **Custom domains**, and set `main` as the production branch. Verify
+`/api/health`, `/api/plates/today`, and `/admin/` before switching users to the
+custom hostname. Do not delete DNS records before Cloudflare is ready; these
+provider actions are intentionally not automated here.
 
 ## CI/CD and repository rules
 
@@ -155,6 +158,11 @@ Use GitHub Actions for pull-request checks and branch pushes. The intended gate
 is dependency installation, lint, type checking, unit/integration tests, and a
 production build; add end-to-end checks as the app gains those workflows. Checks
 should run for PRs into both `dev` and `main`, and for pushes to both branches.
+The Cloudflare preview job downloads only the PR merge-ref archive, copies
+`docs/` into a staging directory, and never checks out or executes fork code.
+Configure `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as repository
+Actions secrets and create the `cottage44-menu-pages` project. Successful
+previews use `https://pr-<number>.cottage44-menu-pages.pages.dev`.
 The exact check names should be made required only after the workflow has run
 successfully at least once. The initial workflow now provides `checks`,
 and this check is configured as required on both protected branches.
@@ -176,7 +184,7 @@ The existing `.github/workflows/ci.yml` detects migration changes on pushes to
 `Cottage44_menu` GitHub environment and Supabase CLI to link the configured
 project and run `supabase db push --linked --yes`. The CLI applies only
 migrations missing from that project's migration history. Existing CI check
-names and the Cloudflare/GitHub Pages deployment configuration are unchanged.
+names remain unchanged; Cloudflare Pages is the supported deployment path.
 
 Before the first migration-triggering push, configure the existing GitHub
 environment at **Settings → Environments → Cottage44_menu**:
@@ -299,7 +307,7 @@ References checked 7 October 2026:
 
 - [Supabase pricing and free-plan limits](https://supabase.com/pricing)
 - [Cloudflare Workers and Pages pricing](https://developers.cloudflare.com/workers/platform/pricing/)
-- [GitHub Pages limits and usage policy](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits)
+- [GitHub Pages settings and limits](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits)
 
 ## Local setup and manual account steps
 
@@ -333,10 +341,10 @@ References checked 7 October 2026:
    intended Supabase project. The variable names are identical in both
    environments. Do not add service-role credentials.
 6. Deploy the reviewed branch to Cloudflare Pages before using `/admin/`.
-   GitHub Pages can render the static files but does not run these API
-   Functions. This work has not created a Pages project, deployed, or changed
-   DNS. The runtime configuration values have not been supplied or written
-   into this repository.
+   The old GitHub Pages host does not run these API Functions. This repository
+   change does not create a Pages project, deploy production, or change DNS.
+   The runtime configuration values have not been supplied or written into
+   this repository.
 7. In Cloudflare Pages **Settings → Variables and Secrets**, set the non-secret
    `ADMIN_SITE_URL` binding in **Production** to
    `https://menu.cottage44.co.za` (origin only, no path). Do not set it per
