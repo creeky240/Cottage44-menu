@@ -28,6 +28,11 @@ included in that JavaScript coverage figure. Coverage collection uses no
 external service or secret. There is no lint, typecheck, or build stage because
 the site has no application toolchain; CI does not deploy to a hosting provider.
 
+This describes the current deployment only. GitHub Pages' usage policy may not
+permit a commercial restaurant website, so the proposed production destination
+is Cloudflare Pages. See [the architecture proposal](docs/architecture.md)
+before changing hosting or DNS.
+
 Menu items and prices are maintained in `docs/menu.js`. The light/dark theme
 preference is stored in the browser.
 
