@@ -153,14 +153,22 @@ async function runCoverage() {
   const rawCoverageDirectory = await mkdtemp(
     path.join(os.tmpdir(), "cottage44-v8-coverage-"),
   );
+  const testFiles = (await readdir(path.join(root, "test")))
+    .filter((file) => /\.test\.(?:js|ts)$/.test(file))
+    .sort()
+    .map((file) => path.join("test", file));
   let testExitCode = 1;
 
   try {
-    const testRun = spawnSync(process.execPath, ["--test"], {
-      cwd: root,
-      env: { ...process.env, NODE_V8_COVERAGE: rawCoverageDirectory },
-      stdio: "inherit",
-    });
+    const testRun = spawnSync(
+      process.execPath,
+      ["--import", "tsx", "--test", ...testFiles],
+      {
+        cwd: root,
+        env: { ...process.env, NODE_V8_COVERAGE: rawCoverageDirectory },
+        stdio: "inherit",
+      },
+    );
     if (testRun.error) {
       throw testRun.error;
     }

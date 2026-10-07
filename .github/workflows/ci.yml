@@ -30,8 +30,10 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Run tests and collect JavaScript coverage
         run: npm run coverage
-      - name: Check static files and JavaScript syntax
+      - name: Type-check and check static files
         run: npm run check
+      - name: Build Pages Functions
+        run: npm run build
       - name: Upload JavaScript coverage report
         if: always()
         uses: actions/upload-artifact@v4
