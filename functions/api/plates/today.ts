@@ -25,6 +25,12 @@ type DailyPlateRecord = {
   plate: PlateRecord;
 };
 
+function addDay(value: string): string {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
+}
+
 type Dependencies = {
   fetchImpl?: typeof fetch;
   now?: Date;
@@ -116,8 +122,10 @@ export async function handleTodayRequest(
     "select",
     "service_date,plate:plates(id,name,description,price_cents,image_url)",
   );
-  queryUrl.searchParams.set("service_date", `eq.${serviceDate}`);
-  queryUrl.searchParams.set("limit", "1");
+  queryUrl.searchParams.append("service_date", `gte.${serviceDate}`);
+  queryUrl.searchParams.append("service_date", `lte.${addDay(serviceDate)}`);
+  queryUrl.searchParams.set("order", "service_date.asc");
+  queryUrl.searchParams.set("limit", "2");
 
   let response: Response;
   try {
@@ -143,28 +151,33 @@ export async function handleTodayRequest(
     return upstreamFailure();
   }
 
-  if (!Array.isArray(rows) || rows.length > 1) {
+  if (!Array.isArray(rows) || rows.length > 2) {
     logger.error("[api] Supabase returned an invalid daily plate result.");
     return upstreamFailure();
   }
-  if (rows.length === 0) {
-    return jsonResponse({ plate: null });
-  }
-  if (!isDailyPlateRecord(rows[0], serviceDate, config.url)) {
+  if (!rows.every((row) => {
+    const date = isRecord(row) && typeof row.service_date === "string"
+      ? row.service_date
+      : "";
+    return isDailyPlateRecord(row, date, config.url) &&
+      (date === serviceDate || date === addDay(serviceDate));
+  })) {
     logger.error("[api] Supabase returned a daily plate with an invalid schema.");
     return upstreamFailure();
   }
-
-  const row = rows[0];
+  const mapPlate = (row: DailyPlateRecord | undefined) => row
+    ? {
+        id: row.plate.id,
+        serviceDate: row.service_date,
+        name: row.plate.name.trim(),
+        description: row.plate.description,
+        priceCents: row.plate.price_cents,
+        imageUrl: row.plate.image_url,
+      }
+    : null;
   return jsonResponse({
-    plate: {
-      id: row.plate.id,
-      serviceDate: row.service_date,
-      name: row.plate.name.trim(),
-      description: row.plate.description,
-      priceCents: row.plate.price_cents,
-      imageUrl: row.plate.image_url,
-    },
+    plate: mapPlate(rows.find((row) => row.service_date === serviceDate)),
+    nextPlate: mapPlate(rows.find((row) => row.service_date === addDay(serviceDate))),
   });
 }
 

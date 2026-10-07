@@ -715,6 +715,7 @@ test("setting today's plate uses the server's Johannesburg date and the authenti
     },
     body: JSON.stringify({ plateId: "8d2b48f2-7932-4ff0-9e80-7ac5efc438f0" }),
   });
+
   let authorization = "";
   let requestPayload: unknown;
   const response = await handleTodayAdminRequest(
@@ -762,6 +763,80 @@ test("setting today's plate uses the server's Johannesburg date and the authenti
       },
     },
   });
+});
+
+test("owner can plan a saved plate for a future service date", async () => {
+  const cookieRequest = sessionRequest(false, "https://menu.example/api/admin/plates/today");
+  const request = new Request(cookieRequest.url, {
+    method: "POST",
+    headers: {
+      Origin: "https://menu.example",
+      Cookie: cookieRequest.headers.get("Cookie") ?? "",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      serviceDate: "2026-10-09",
+      plateId: "8d2b48f2-7932-4ff0-9e80-7ac5efc438f0",
+    }),
+  });
+  let requestPayload: unknown;
+  const response = await handleTodayAdminRequest(
+    request,
+    env,
+    {
+      fetchImpl: async (input, init) => {
+        if (String(input).endsWith("/auth/v1/user")) {
+          return jsonResponse({ email: OWNER_EMAIL });
+        }
+        requestPayload = JSON.parse(String(init?.body));
+        return jsonResponse([{
+          service_date: "2026-10-09",
+          plate: {
+            id: "8d2b48f2-7932-4ff0-9e80-7ac5efc438f0",
+            name: "Friday plate",
+            description: "Fresh",
+            price_cents: 12500,
+            image_url: null,
+          },
+        }]);
+      },
+    },
+    new Date("2026-10-06T22:00:00.000Z"),
+  );
+  assert.equal(response.status, 200);
+  assert.deepEqual(requestPayload, {
+    service_date: "2026-10-09",
+    plate_id: "8d2b48f2-7932-4ff0-9e80-7ac5efc438f0",
+  });
+  assert.equal((await response.json()).today.serviceDate, "2026-10-09");
+});
+
+test("owner planning rejects dates beyond the one-year window", async () => {
+  const baseRequest = sessionRequest(false, "https://menu.example/api/admin/plates/today");
+  const request = new Request(baseRequest.url, {
+    method: "POST",
+    headers: {
+      Origin: "https://menu.example",
+      Cookie: baseRequest.headers.get("Cookie") ?? "",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      serviceDate: "2028-01-01",
+      plateId: "8d2b48f2-7932-4ff0-9e80-7ac5efc438f0",
+    }),
+  });
+  let databaseCalled = false;
+  const response = await handleTodayAdminRequest(request, env, {
+    fetchImpl: async (input) => {
+      if (String(input).endsWith("/auth/v1/user")) {
+        return jsonResponse({ email: OWNER_EMAIL });
+      }
+      databaseCalled = true;
+      return jsonResponse([]);
+    },
+  }, new Date("2026-10-06T22:00:00.000Z"));
+  assert.equal(response.status, 400);
+  assert.equal(databaseCalled, false);
 });
 
 test("owner plate creation forwards validated fields with the Supabase user token", async () => {

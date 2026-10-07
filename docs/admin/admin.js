@@ -30,6 +30,11 @@ const serviceDate = document.querySelector("#service-date");
 const setTodayButton = document.querySelector("#set-today");
 const newPlateButton = document.querySelector("#new-plate");
 const cancelEditButton = document.querySelector("#cancel-edit");
+const scheduleDateInput = document.querySelector("#schedule-date");
+const scheduleSelect = document.querySelector("#schedule-select");
+const saveScheduleButton = document.querySelector("#save-schedule");
+const scheduleSummary = document.querySelector("#schedule-summary");
+const weeklyPlanList = document.querySelector("#weekly-plan-list");
 
 let plates = [];
 let history = [];
@@ -187,7 +192,103 @@ function renderPlateList() {
     plateList.append(item);
   }
   setTodayButton.disabled = plates.length === 0;
+  scheduleSelect.replaceChildren();
+  const schedulePlaceholder = document.createElement("option");
+  schedulePlaceholder.value = "";
+  schedulePlaceholder.textContent = plates.length ? "Select a saved plate" : "Save a plate first";
+  scheduleSelect.append(schedulePlaceholder);
+  for (const plate of plates) {
+    const option = document.createElement("option");
+    option.value = plate.id;
+    option.textContent = plate.name;
+    scheduleSelect.append(option);
+  }
   updateTodaySummary();
+  updateScheduleSummary();
+}
+
+function updateScheduleSummary() {
+  const selected = plates.find((plate) => plate.id === scheduleSelect.value);
+  scheduleSummary.textContent = selected && scheduleDateInput.value
+    ? `${selected.name} is ready to be planned for ${scheduleDateInput.value}.`
+    : "Choose a date and saved plate.";
+}
+
+function planningWeekdays(startDate) {
+  const dates = [];
+  const date = new Date(`${startDate}T00:00:00.000Z`);
+  while (dates.length < 5) {
+    const day = date.getUTCDay();
+    if (day !== 0 && day !== 6) {
+      dates.push(date.toISOString().slice(0, 10));
+    }
+
+    function addDays(value, amount) {
+      const date = new Date(`${value}T00:00:00.000Z`);
+      date.setUTCDate(date.getUTCDate() + amount);
+      return date.toISOString().slice(0, 10);
+    }
+    date.setUTCDate(date.getUTCDate() + 1);
+  }
+  return dates;
+}
+
+function renderWeeklyPlan() {
+  weeklyPlanList.replaceChildren();
+  if (!serviceDate.textContent) {
+    return;
+  }
+  const assignments = new Map(history.map((item) => [item.serviceDate, item.plate]));
+  for (const date of planningWeekdays(serviceDate.textContent)) {
+    const row = document.createElement("div");
+    row.className = "weekly-plan-row";
+    const label = document.createElement("label");
+    label.textContent = new Intl.DateTimeFormat("en-ZA", {
+      weekday: "long",
+      day: "numeric",
+      month: "short",
+      timeZone: "Africa/Johannesburg",
+    }).format(new Date(`${date}T12:00:00.000Z`));
+    const select = document.createElement("select");
+    select.setAttribute("aria-label", `Saved plate for ${label.textContent}`);
+    const empty = document.createElement("option");
+    empty.value = "";
+    empty.textContent = "Not planned";
+    select.append(empty);
+    for (const plate of plates) {
+      const option = document.createElement("option");
+      option.value = plate.id;
+      option.textContent = plate.name;
+      select.append(option);
+    }
+    const existing = assignments.get(date);
+    if (existing) {
+      select.value = existing.id;
+    }
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "button button--secondary";
+    button.textContent = "Save";
+    button.addEventListener("click", async () => {
+      if (!select.value) {
+        setStatus("Choose a saved plate for this day first.", "error");
+        return;
+      }
+      setStatus(`Saving the plate for ${label.textContent}…`);
+      try {
+        const result = await apiRequest("/api/admin/plates/today", {
+          method: "POST",
+          body: JSON.stringify({ serviceDate: date, plateId: select.value }),
+        });
+        await loadDashboard();
+        setStatus(`${result.today.plate.name} planned for ${date}.`, "success");
+      } catch (error) {
+        setStatus(error.message, "error");
+      }
+    });
+    row.append(label, select, button);
+    weeklyPlanList.append(row);
+  }
 }
 
 function renderHistory() {
@@ -223,12 +324,40 @@ async function loadDashboard() {
     history = daily.history;
     todayPlateId = daily.today?.id ?? null;
     serviceDate.textContent = daily.serviceDate;
+    scheduleDateInput.min = daily.serviceDate;
+    scheduleDateInput.max = addDays(daily.serviceDate, 365);
+    scheduleDateInput.value ||= daily.serviceDate;
     renderPlateList();
+    renderWeeklyPlan();
     renderHistory();
     setStatus("");
   } catch (error) {
     setStatus(error.message, "error");
   }
+
+  scheduleDateInput.addEventListener("change", updateScheduleSummary);
+  scheduleSelect.addEventListener("change", updateScheduleSummary);
+
+  saveScheduleButton.addEventListener("click", async () => {
+    if (!scheduleDateInput.value || !scheduleSelect.value) {
+      setStatus("Choose a date and saved plate first.", "error");
+      return;
+    }
+    setStatus("Saving the planned plate…");
+    try {
+      const result = await apiRequest("/api/admin/plates/today", {
+        method: "POST",
+        body: JSON.stringify({
+          serviceDate: scheduleDateInput.value,
+          plateId: scheduleSelect.value,
+        }),
+      });
+      await loadDashboard();
+      setStatus(`${result.today.plate.name} planned for ${result.today.serviceDate}.`, "success");
+    } catch (error) {
+      setStatus(error.message, "error");
+    }
+  });
 }
 
 function resetForm() {
