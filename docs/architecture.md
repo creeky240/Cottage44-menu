@@ -192,6 +192,30 @@ values in repository files, workflow YAML, or command output. The secrets and
 variable must point to the existing project where the migrations below were
 already applied manually.
 
+#### Diagnosing a failed future-date assignment
+
+The owner assignment endpoint permits future dates only when Supabase accepts
+the authenticated insert/update under the `daily_plates` owner policies from
+`20261007130000_add_future_plate_planning.sql`. A 401/403 response for a
+future date is returned to the owner as:
+
+> Future planning is not enabled yet. Please ask the site administrator to
+> apply the latest database migration, then try again.
+
+This message does not expose the upstream response. Inspect the push-to-`dev`
+workflow before changing code. If the `Apply Supabase migrations` job exits
+at its configuration preflight, configure all three values in the
+`Cottage44_menu` environment:
+
+- secret `SUPABASE_ACCESS_TOKEN`
+- secret `SUPABASE_DB_PASSWORD`
+- variable `SUPABASE_PROJECT_REF`
+
+Then verify the target project and migration history. The migration job uses
+`supabase db push --linked --yes`; it does not run for pull requests and it
+does not run when no migration file changed. Never create a duplicate SQL
+migration or apply it to an unintended project.
+
 Supabase may not know about SQL run directly in its SQL editor. Before
 automation is used, verify in that exact project that both schemas and policies
 from the migrations are already present, then run this one-time history

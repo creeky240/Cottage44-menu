@@ -29,6 +29,8 @@ function initialAdminTheme(storedTheme = null) {
 
 const adminSelectors = [
   "#status",
+  "#status-message",
+  "#status-close",
   "#sign-in-panel",
   "#sign-in-form",
   "#sign-in-submit",
@@ -142,6 +144,8 @@ test("admin UI remembers by default and completes sign-in, upload, save, and tod
     elements[selector].hidden = true;
   }
   const calls = [];
+  const timers = new Map();
+  let nextTimer = 1;
   let savedPlates = [];
   let todaysPlate = null;
   let failSignIn = true;
@@ -285,6 +289,12 @@ test("admin UI remembers by default and completes sign-in, upload, save, and tod
       revokeObjectURL: () => {},
     },
     URLSearchParams,
+    setTimeout: (callback, delay) => {
+      const id = nextTimer++;
+      timers.set(id, { callback, delay });
+      return id;
+    },
+    clearTimeout: (id) => timers.delete(id),
     window: {
       confirm: () => true,
       location: { search: "", pathname: "/admin/" },
@@ -295,7 +305,7 @@ test("admin UI remembers by default and completes sign-in, upload, save, and tod
   vm.runInContext(adminScript, context, { filename: "docs/admin/admin.js" });
 
   await elements["#sign-in-form"].listeners.submit({ preventDefault() {} });
-  assert.equal(elements["#status"].textContent, "Email or password is incorrect.");
+  assert.equal(elements["#status-message"].textContent, "Email or password is incorrect.");
   assert.equal(elements["#status"].dataset.kind, "error");
   assert.equal(elements["#dashboard"].hidden, true);
 
@@ -314,7 +324,7 @@ test("admin UI remembers by default and completes sign-in, upload, save, and tod
   imageInput.type = "file";
   imageInput.files = [{ type: "image/svg+xml", name: "not-a-photo.svg", size: 3 }];
   imageInput.listeners.change();
-  assert.match(elements["#status"].textContent, /Choose a photo such as JPEG, PNG, WebP, or HEIC/);
+  assert.match(elements["#status-message"].textContent, /Choose a photo such as JPEG, PNG, WebP, or HEIC/);
   assert.equal(elements["#image-preview"].hidden, true);
 
   imageInput.files = [{ type: "image/jpeg", name: "large-photo.jpg", size: 5 * 1024 * 1024 + 1 }];
@@ -339,7 +349,7 @@ test("admin UI remembers by default and completes sign-in, upload, save, and tod
 
   failImageUpload = true;
   await elements["#plate-form"].listeners.submit({ preventDefault() {} });
-  assert.equal(elements["#status"].textContent, "The image could not be uploaded. Please try again.");
+  assert.equal(elements["#status-message"].textContent, "The image could not be uploaded. Please try again.");
   assert.equal(calls.some(({ url, options }) => url === "/api/admin/plates" && options.method === "POST"), false);
   failImageUpload = false;
   await elements["#plate-form"].listeners.submit({ preventDefault() {} });
@@ -397,12 +407,24 @@ test("admin UI remembers by default and completes sign-in, upload, save, and tod
   elements["#forgot-password"].listeners.click();
   assert.equal(elements["#recovery-request-panel"].hidden, false);
   await elements["#recovery-request-form"].listeners.submit({ preventDefault() {} });
-  assert.match(elements["#status"].textContent, /If the address belongs to the owner account/);
+  assert.match(elements["#status-message"].textContent, /If the address belongs to the owner account/);
   const recoveryCall = calls.find(({ url, options }) =>
     url === "/api/admin/password-recovery" && options.method === "POST");
   assert.deepEqual(JSON.parse(recoveryCall.options.body), {
     email: "corne.dawson@gmail.com",
   });
+  assert.match(adminHtml, /id="status-close"[^>]*aria-label="Close notification"/);
+  assert.ok([...timers.values()].some(({ delay }) => delay === 5000));
+  elements["#status-close"].listeners.click();
+  assert.equal(elements["#status"].hidden, true);
+  assert.equal(elements["#status-message"].textContent, "");
+
+  elements["#plate-price"].value = "not-a-price";
+  await elements["#plate-form"].listeners.submit({ preventDefault() {} });
+  assert.ok([...timers.values()].some(({ delay }) => delay === 10000));
+  const errorTimer = [...timers.entries()].find(([, timer]) => timer.delay === 10000);
+  errorTimer[1].callback();
+  assert.equal(elements["#status"].hidden, true);
 
   // Exercise the duplicate-submit guards and user-visible failure paths for each
   // mutation control without waiting on a real network request.
@@ -598,8 +620,8 @@ test("recovery UI displays nested API errors as human-readable messages", async 
   elements["#forgot-password"].listeners.click();
   await elements["#recovery-request-form"].listeners.submit({ preventDefault() {} });
 
-  assert.equal(elements["#status"].textContent, "The service is temporarily unavailable.");
-  assert.doesNotMatch(elements["#status"].textContent, /\[object Object\]/);
+  assert.equal(elements["#status-message"].textContent, "The service is temporarily unavailable.");
+  assert.doesNotMatch(elements["#status-message"].textContent, /\[object Object\]/);
   assert.equal(
     requests.filter(({ url }) => url === "/api/admin/password-recovery").length,
     1,
@@ -644,7 +666,7 @@ test("verified recovery links show the password form and submit the confirmed pa
   vm.runInContext(adminScript, context, { filename: "docs/admin/admin.js" });
   assert.equal(elements["#sign-in-panel"].hidden, true);
   assert.equal(elements["#password-reset-panel"].hidden, false);
-  assert.match(elements["#status"].textContent, /Reset link verified/);
+  assert.match(elements["#status-message"].textContent, /Reset link verified/);
 
   await elements["#password-reset-form"].listeners.submit({ preventDefault() {} });
   assert.equal(requests[0].url, "/api/admin/password-recovery/update");
@@ -653,5 +675,5 @@ test("verified recovery links show the password form and submit the confirmed pa
   });
   assert.equal(elements["#password-reset-panel"].hidden, true);
   assert.equal(elements["#sign-in-panel"].hidden, false);
-  assert.match(elements["#status"].textContent, /password has been updated/i);
+  assert.match(elements["#status-message"].textContent, /password has been updated/i);
 });
