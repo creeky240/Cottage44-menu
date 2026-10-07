@@ -65,7 +65,12 @@ authorized for this repository.
 Pull requests into `dev` also receive a Cloudflare Pages preview comment from
 `.github/workflows/cloudflare-preview.yml`. The repository must have
 `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` configured as Actions
-secrets, and the Pages project must be named `cottage44-menu-pages`.
+secrets, and the Pages project must be named `cottage44-menu-pages`. The
+workflow runs as `pull_request_target` so fork pull requests can use the
+repository's deployment secrets, but it downloads only the PR merge ref's
+static `docs/` files through the GitHub API; it never checks out or executes
+fork code. Each successful deployment is linked at
+`https://pr-<number>.cottage44-menu-pages.pages.dev` in the pull request.
 
 ## Supabase migrations
 

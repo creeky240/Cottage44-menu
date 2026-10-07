@@ -155,6 +155,16 @@ Use GitHub Actions for pull-request checks and branch pushes. The intended gate
 is dependency installation, lint, type checking, unit/integration tests, and a
 production build; add end-to-end checks as the app gains those workflows. Checks
 should run for PRs into both `dev` and `main`, and for pushes to both branches.
+
+The Cloudflare preview workflow is intentionally a `pull_request_target` job so
+fork PRs can use the repository's Cloudflare secrets. It does not check out or
+execute fork code: it downloads the merge-ref archive with the read-only
+GitHub token, copies only `docs/` into a staging directory, and deploys that
+static directory. Configure `CLOUDFLARE_API_TOKEN` and
+`CLOUDFLARE_ACCOUNT_ID` as repository Actions secrets and create the Pages
+project `cottage44-menu-pages`. Successful PRs receive a deterministic preview
+URL comment at
+`https://pr-<number>.cottage44-menu-pages.pages.dev`.
 The exact check names should be made required only after the workflow has run
 successfully at least once. The initial workflow now provides `checks`,
 and this check is configured as required on both protected branches.
