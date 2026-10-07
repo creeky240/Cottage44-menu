@@ -36,6 +36,19 @@ Keep the existing menu and its design. Public pages remain static and do not
 require a custom server to be running. The API is a Pages Function, not a
 browser Supabase client or a separate frontend application.
 
+The public page requests `/api/plates/today` from the same origin and renders
+the plate's name, description, Johannesburg service date, price, and optional
+photo. Loading, no-plate, invalid-response, and request-failure states are
+handled without exposing server errors; an unavailable image is replaced with
+a text fallback. Tests use mocked API responses and do not require Supabase.
+For a live preview, Cloudflare Pages must build this feature branch with Pages
+Functions enabled, the required Supabase bindings configured, and the plate
+migration applied. Verify the preview's `/api/plates/today` route returns
+`application/json` with `{ "plate": null }` or a valid current-date plate.
+A preview served from an older static-only deployment can return an HTML
+fallback for the API path, in which case the page will intentionally show its
+safe unavailable message rather than a plate.
+
 ### Backend, authentication, and authorization
 
 Use Cloudflare Pages Functions as a serverless API layer in front of Supabase
