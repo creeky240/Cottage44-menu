@@ -1,12 +1,30 @@
 # Cottage 44 menu
 
-A responsive, static digital menu for Cottage 44. The site uses plain HTML,
-CSS, and JavaScript; it has no build step, server, or runtime dependencies.
+A responsive digital menu for Cottage 44. The menu frontend uses plain HTML,
+CSS, and JavaScript with no build step or runtime dependencies. A separate
+Cloudflare Pages Functions API provides the backend foundation.
 
 ## Local preview
 
 Open `docs/index.html` in a browser, or serve the `docs/` directory with any
 static file server.
+
+## Backend foundation
+
+Cloudflare Pages Functions provide the API and owner administration. The
+public menu reads only today's plate; `/admin/` supports owner sign-in, saved
+plates, image uploads, date history, and setting today's plate. Supabase Auth
+password tokens are held in a Secure/HttpOnly/SameSite cookie and are never
+stored in browser local storage. Database and Storage RLS enforce the owner
+email independently of the UI. See
+[the architecture and setup notes](docs/architecture.md) for security choices,
+local bindings, production/preview configuration, and required manual setup.
+
+For local API development, install dependencies with `npm ci`, copy
+`.env.example` to `.dev.vars`, and replace its placeholders with the Supabase
+project URL and publishable key. Start Pages locally with `npm run dev`.
+`.dev.vars` is ignored by Git and must not be committed. The admin UI and API
+require Cloudflare Pages; GitHub Pages serves only the static menu.
 
 ## GitHub Pages
 
@@ -19,14 +37,13 @@ CI workflow checks changes but does not deploy the site.
 ## Continuous integration
 
 The `checks` job runs for pull requests and for pushes to `dev` or `main`. It
-installs from the lockfile, runs the menu tests with Node's built-in V8 coverage
-collection, checks JavaScript syntax, and verifies the static entry point and
-stylesheet exist. The job summary reports line and function coverage for
-`docs/menu.js`, and the `javascript-coverage` artifact contains its LCOV and
-text reports. HTML, CSS, and the inline theme initialization script are not
-included in that JavaScript coverage figure. Coverage collection uses no
-external service or secret. There is no lint, typecheck, or build stage because
-the site has no application toolchain; CI does not deploy to a hosting provider.
+installs from the lockfile, runs the menu and API tests with Node's built-in
+V8 coverage collection, type-checks the Functions, checks static files and
+JavaScript syntax, and builds the Pages Functions bundle with Wrangler. The
+coverage summary measures `docs/menu.js`; HTML, CSS, the inline theme script,
+and API files are not included in that LCOV report. The `javascript-coverage`
+artifact contains LCOV and text reports. CI does not deploy to a hosting
+provider.
 
 Successful CI runs on this repository upload `coverage/lcov.info` to Codecov.
 Fork pull requests still run checks and retain the coverage artifact, but skip
@@ -34,13 +51,11 @@ the upload because they cannot access the Codecov environment secret. Browse
 coverage by file and branch on the
 [Codecov dashboard](https://app.codecov.io/gh/sdcreek240/Cottage44-menu). The
 dashboard and pull request comments require Codecov's GitHub App to be
-authorized for this repository. The report measures `docs/menu.js` only; HTML,
-CSS, and the inline theme initialization script are not included.
+authorized for this repository.
 
-This describes the current deployment only. GitHub Pages' usage policy may not
-permit a commercial restaurant website, so the proposed production destination
-is Cloudflare Pages. See [the architecture proposal](docs/architecture.md)
-before changing hosting or DNS.
+GitHub Pages is the current static deployment; Cloudflare Pages is the proposed
+production host. This backend foundation does not deploy Pages or change DNS.
+See [the architecture proposal](docs/architecture.md) for setup status.
 
 Menu items and prices are maintained in `docs/menu.js`. The light/dark theme
 preference is stored in the browser.

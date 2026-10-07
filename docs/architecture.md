@@ -1,88 +1,122 @@
 # Cottage 44 architecture proposal
 
-Status: proposed foundation for review
+Status: owner workflow implemented; Supabase account setup and hosting remain manual
 
 ## Existing repository and deployment
 
-- The public menu is plain HTML, CSS, and JavaScript under `docs/`; there is no
-  application framework, package manager, backend, or build step.
-- Menu data is in `docs/menu.js`. The page already supports responsive layouts
-  and a persisted light/dark theme.
-- The repository has no existing automated test or GitHub Actions configuration.
+- The public menu and the `/admin/` owner page are plain HTML, CSS, and
+  JavaScript under `docs/`.
+- Menu data is in `docs/menu.js`. The public page also reads only today's
+  plate from the Pages API.
+- Cloudflare Pages Functions provide the public daily-plate API and secured
+  owner-management endpoints.
 - GitHub Pages currently publishes `main`/`docs` at
   `https://menu.cottage44.co.za/`, with HTTPS enforced.
-- `main` and `dev` currently point to the same commit. Neither branch currently
-  has protection rules configured.
 - GitHub's Pages usage policy says Pages must not be used for a site primarily
   intended to facilitate commercial transactions. Since this is a restaurant
-  website, the proposed production host is Cloudflare Pages; the existing
-  GitHub Pages deployment should be treated as temporary during migration.
+  website, the proposed production host is Cloudflare Pages. The Pages project
+  has not been configured or deployed.
 
 ## Proposed architecture
 
 ```mermaid
 flowchart LR
-  customer[Customer browser] -->|static site| pages[Cloudflare Pages]
-  pages -->|read today's plate| db[(Supabase Postgres)]
-  pages -->|public image URL| storage[Supabase Storage]
-  owner[Owner browser] -->|sign in and admin actions| auth[Supabase Auth]
-  owner -->|authenticated requests| db
-  owner -->|admin-only uploads| storage
-  auth -->|JWT checked by| rls[Postgres and Storage RLS policies]
-  rls --> db
-  rls --> storage
+  customer[Customer browser] -->|static site and API request| pages[Cloudflare Pages]
+  pages -->|Pages Functions| api[Serverless API]
+  api -->|publishable key + owner JWT + RLS| db[(Supabase Postgres)]
+  api -->|owner JWT + Storage RLS| storage[Supabase Storage]
+  owner[Owner browser] -->|password sign-in, HttpOnly cookie| pages
+  api -->|password verification and refresh| auth[Supabase Auth]
   github[GitHub Actions CI] -->|checks PRs| repo[GitHub repository]
   repo -->|main deploy| pages
 ```
 
 ### Frontend
 
-Keep the existing menu and its design. For the dynamic admin area, use a small
-TypeScript/Vite build only if it is needed to bundle Supabase's client library
-and keep configuration explicit; do not introduce a larger UI framework without
-a demonstrated need. Public pages remain static and do not require a custom
-server to be running.
+Keep the existing menu and its design. Public pages remain static and do not
+require a custom server to be running. The API is a Pages Function, not a
+browser Supabase client or a separate frontend application.
+
+The public page requests `/api/plates/today` from the same origin and renders
+the plate's name, description, Johannesburg service date, price, and optional
+photo. Loading, no-plate, invalid-response, and request-failure states are
+handled without exposing server errors; an unavailable image is replaced with
+a text fallback. Tests use mocked API responses and do not require Supabase.
+For a live preview, Cloudflare Pages must build this feature branch with Pages
+Functions enabled, the required Supabase bindings configured, and the plate
+migration applied. Verify the preview's `/api/plates/today` route returns
+`application/json` with `{ "plate": null }` or a valid current-date plate.
+A preview served from an older static-only deployment can return an HTML
+fallback for the API path, in which case the page will intentionally show its
+safe unavailable message rather than a plate.
 
 ### Backend, authentication, and authorization
 
-Use Supabase Postgres and Supabase Auth. The browser may use the public Supabase
-URL and publishable/anon key, but database row-level security (RLS) and Storage
-policies must enforce access on the service side. Disable public sign-up and
-grant the owner an admin role that cannot be changed through user-editable
-metadata. Never put a Supabase service-role key or database password in browser
-code or a public build.
+Use Cloudflare Pages Functions as a serverless API layer in front of Supabase
+Postgres. The public API exposes `GET /api/health` and
+`GET /api/plates/today`; the latter queries the service date in the
+`Africa/Johannesburg` timezone and returns `{ "plate": null }` if none is
+assigned. A populated response contains only the plate ID, service date, name,
+description, price in cents, and optional HTTPS image URL. Owner routes under
+`/api/admin/` provide sign-in, plate create/update/delete, image upload,
+history, and today's assignment. They return no database errors, internal
+columns, stack traces, or credentials. The browser does not access Supabase
+directly.
 
-Keep backend logic small. Use database policies for access boundaries and add a
-server-side function only if a later requirement cannot safely be implemented
-with Supabase Auth, RLS, and Storage policies.
+The Functions use the project URL and a Supabase publishable key from runtime
+bindings. The public API exposes only the current South African service date
+and the plate fields needed by the menu; it does not expose the catalog or
+history. The public site remains usable if the API is unavailable.
+
+`/admin/` uses Supabase Auth email/password verification through the server.
+The access and refresh tokens are held only in a `Secure` (on HTTPS),
+`HttpOnly`, `SameSite=Strict`, `/api/admin` cookie; the admin JavaScript never
+reads or stores them. Mutations require the exact request `Origin` and an
+authenticated owner session. A checked **Remember me** choice (default) gives
+the cookie a 30-day lifetime; unchecked sessions use a browser-session cookie
+without a persistent expiry.
+Supabase refresh responses preserve the selected duration.
+
+The server accepts only `corne.dawson@gmail.com`, verified against the
+Supabase Auth user email on sign-in and on every request. It does not trust
+user-editable metadata. PostgreSQL and Storage RLS independently compare the
+verified JWT `email` claim with that owner address for every admin operation.
+No service-role key is used or required. Supabase public sign-up must be
+disabled manually, and the owner Auth user must be created manually; see the
+setup steps below.
 
 ### Data and images
 
-Use migrations for the schema. A `plates` table holds plate details and saved
-state; a `daily_plates` table relates a plate to a service date, with a unique
-constraint on that date and a foreign key to the plate. Public reads should
-expose only the current day's plate; authenticated admin reads can access
-history. Use constraints and validation for dates, names, IDs, and deletion
-behaviour.
+Use migrations for the schema. The initial migration creates `plates` and
+`daily_plates`, with field constraints, timestamps, a foreign key, an index,
+and a primary key ensuring only one plate per service date. Its public RLS
+policies allow `anon` to select only the current South African service date
+and the referenced plate. It grants no insert, update, or delete permissions.
+The owner migration grants authenticated catalog/history access and owner-only
+plate and daily-assignment mutations. The history endpoint returns at most the
+most recent 365 daily assignments; saved catalog plates remain reusable.
 
-Store images in Supabase Storage, never in Git. A public-read bucket is
-appropriate for restaurant plate photos, while upload/update/delete operations
-must be restricted by Storage RLS to the admin. Generate object paths from
-server-side-safe identifiers rather than trusting uploaded filenames, and set
-strict image type and size limits.
+Store images in the `cottage44-plates` Supabase Storage bucket, never in Git.
+The bucket is public-read because plate photos are intended for the public
+menu; insert/update/delete are restricted by Storage RLS to the owner email.
+Uploads accept JPEG, PNG, and WebP only, are limited to 5 MiB, and are checked
+against the file signature. Object names are server-generated UUIDs with an
+extension derived from the accepted MIME type; original filenames are ignored.
+Admin writes only accept public URLs from this bucket.
 
 ### Hosting and branch flow
 
 - **Production frontend:** Cloudflare Pages, custom domain
   `menu.cottage44.co.za`, production branch `main`.
+- **API:** Cloudflare Pages Functions under `functions/api/`, using the
+  Supabase URL and publishable key as runtime bindings.
 - **Integration:** feature branches merge through pull requests into `dev`.
   Cloudflare Pages can provide preview deployments for development branches
   and pull requests.
 - **Production release:** promote reviewed, CI-passing changes from `dev` to
   `main`; only `main` deploys to the production site.
-- **DNS cutover:** keep the current site intact until a Cloudflare Pages build
-  is verified. Changing DNS or transferring nameservers requires the owner;
-  no live DNS settings should be changed as part of this proposal.
+
+Cloudflare Pages setup and DNS changes are outside this implementation.
 
 ## CI/CD and repository rules
 
@@ -107,20 +141,22 @@ deletion protections have been enabled on both branches. The required status con
 
 The public Supabase URL and publishable/anon key are identifiers intended for
 browser use, not secrets; they are safe only when RLS is correctly configured.
-Keep server-only credentials (including service-role keys, database passwords,
-and deployment tokens) out of the repository, logs, and public build output.
-Store any required deployment credentials in GitHub Actions secrets or the
-hosting provider's encrypted settings. Do not create credentials or configure
-production environments without the owner's account.
+`SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` are the only runtime bindings
+used by these Functions. Configure both under Cloudflare Pages **Preview** and
+**Production** environments with the same binding names. They identify the
+project and are not service credentials; RLS is the security boundary. Do not
+add a service-role key, database password, JWT signing secret, or deployment
+token to the app. Keep any unrelated deployment credentials out of the
+repository and public build output.
 
 ## Cost and operational limits
 
-The target is **R0/month**. Cloudflare Pages static assets are free and
-unlimited under the documented Workers Free plan; avoid Workers/Pages Functions
-unless a requirement justifies them. Supabase Free is $0/month and currently
-lists 50,000 monthly active users, 500 MB database, 5 GB egress, 5 GB cached
-egress, and 1 GB file storage. Free projects may be paused after one week of
-inactivity and the free plan is limited to two active projects.
+The target is **R0/month**. Cloudflare Pages and Supabase Free are the selected
+tiers; Pages Functions use Cloudflare Workers quotas, which should be checked
+against current limits before launch. Supabase Free currently lists 50,000
+monthly active users, 500 MB database, 5 GB egress, 5 GB cached egress, and 1
+GB file storage. Free projects may be paused after one week of inactivity and
+the free plan is limited to two active projects.
 
 Expected usage is one small restaurant menu, one current plate image, and
 occasional owner updates; compress images and monitor usage to keep within the
@@ -137,18 +173,38 @@ References checked 7 October 2026:
 - [Cloudflare Workers and Pages pricing](https://developers.cloudflare.com/workers/platform/pricing/)
 - [GitHub Pages limits and usage policy](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits)
 
-## Accounts and owner setup still required
+## Local setup and manual account steps
 
-1. Create or confirm a Cloudflare account and add the Cottage 44 domain. The
-   owner must retain registrar/DNS access for the later production cutover.
-2. Create a Supabase account and project. Select a suitable nearby region, then
-   provide the project URL and publishable/anon key through a secure channel;
-   never send or commit the service-role key.
-3. Confirm the owner email to invite as the sole admin. Disable public
-   registration and assign the server-managed admin role during setup.
-4. After the implementation is ready, configure Cloudflare Pages' GitHub
-   connection and the production custom domain. No credentials or account
-   configuration can be guessed or safely completed without these accounts.
+1. In the intended Supabase project, disable public user registration in
+   **Authentication → Settings → User Signups** (“Allow new users to sign up”).
+   Keep sign-in enabled.
+2. Create the owner in **Authentication → Users → Add user** with the exact
+   email `corne.dawson@gmail.com` and a strong, unique password. Confirm the
+   email in the dashboard if the project requires confirmation. Do not grant
+   access through user-editable metadata. Password resets are managed through
+   Supabase Auth.
+3. Review and apply, in order, the migrations
+   `20261007100000_create_plates_and_daily_plates.sql` and
+   `20261007110000_add_owner_admin_and_plate_images.sql` to the intended
+   project using its SQL editor. The latter creates the bucket and owner-only
+   database/Storage policies. It has not been applied remotely by this work.
+4. For local development, run `npm ci`, copy `.env.example` to `.dev.vars`,
+   and replace placeholders locally (do not commit the file):
 
-This proposal does not authorize a production DNS change, paid-plan upgrade, or
-application implementation. Those remain gated on service setup and review.
+   ```dotenv
+   SUPABASE_URL=https://your-project-ref.supabase.co
+   SUPABASE_PUBLISHABLE_KEY=sb_publishable_replace_with_project_key
+   ```
+
+   Start local Pages with `npm run dev`; `.dev.vars` is Git-ignored. Use only
+   the URL and publishable key—never put a service-role key in `.dev.vars`.
+5. In Cloudflare Pages **Settings → Variables and Secrets**, add
+   `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` separately to both the
+   **Preview** and **Production** environments, using the values from the
+   intended Supabase project. The variable names are identical in both
+   environments. Do not add service-role credentials.
+6. Deploy the reviewed branch to Cloudflare Pages before using `/admin/`.
+   GitHub Pages can render the static files but does not run these API
+   Functions. This work has not created a Pages project, deployed, or changed
+   DNS. The runtime configuration values have not been supplied or written
+   into this repository.
