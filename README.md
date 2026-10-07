@@ -18,11 +18,15 @@ CI workflow checks changes but does not deploy the site.
 
 ## Continuous integration
 
-The `CI / checks` job runs for pull requests and for pushes to `dev` or `main`.
-It installs from the lockfile, runs the menu tests, checks JavaScript syntax,
-and verifies the static entry point and stylesheet exist. There is no lint,
-typecheck, or build stage because the site has no application toolchain; CI
-does not deploy to a hosting provider.
+The `checks` job runs for pull requests and for pushes to `dev` or `main`. It
+installs from the lockfile, runs the menu tests with Node's built-in V8 coverage
+collection, checks JavaScript syntax, and verifies the static entry point and
+stylesheet exist. The job summary reports line and function coverage for
+`docs/menu.js`, and the `javascript-coverage` artifact contains its LCOV and
+text reports. HTML, CSS, and the inline theme initialization script are not
+included in that JavaScript coverage figure. Coverage collection uses no
+external service or secret. There is no lint, typecheck, or build stage because
+the site has no application toolchain; CI does not deploy to a hosting provider.
 
 Menu items and prices are maintained in `docs/menu.js`. The light/dark theme
 preference is stored in the browser.

@@ -28,7 +28,17 @@ jobs:
           node-version: 22.22.1
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
-      - name: Run tests
-        run: npm test
+      - name: Run tests and collect JavaScript coverage
+        run: npm run coverage
       - name: Check static files and JavaScript syntax
         run: npm run check
+      - name: Upload JavaScript coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: javascript-coverage
+          path: |
+            coverage/lcov.info
+            coverage/summary.txt
+          if-no-files-found: warn
+          retention-days: 14
