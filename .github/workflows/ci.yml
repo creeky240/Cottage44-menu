@@ -56,6 +56,10 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Check out repository for source and Codecov configuration
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Download JavaScript coverage report
         uses: actions/download-artifact@v4
         with:
