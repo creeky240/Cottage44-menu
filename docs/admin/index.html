@@ -25,7 +25,10 @@
       <button id="sign-out" class="button button--quiet" type="button" hidden>Sign out</button>
     </header>
     <main id="main">
-      <div id="status" class="status" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+      <div id="status" class="status" role="status" aria-live="polite" aria-atomic="true" hidden>
+        <span id="status-message"></span>
+        <button id="status-close" class="status__close" type="button" aria-label="Close notification">×</button>
+      </div>
       <section id="sign-in-panel" class="panel sign-in" aria-labelledby="sign-in-title">
         <h1 id="sign-in-title">Owner sign in</h1>
         <p>Sign in with the owner account to manage today’s plate.</p>

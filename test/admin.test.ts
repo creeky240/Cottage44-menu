@@ -839,7 +839,7 @@ test("owner planning rejects dates beyond the one-year window", async () => {
   assert.equal(databaseCalled, false);
 });
 
-test("future assignment failures explain the date without exposing provider details", async () => {
+test("future assignment failures identify an unapplied planning migration without exposing provider details", async () => {
   const baseRequest = sessionRequest(false, "https://menu.example/api/admin/plates/today");
   const request = new Request(baseRequest.url, {
     method: "POST",
@@ -861,9 +861,9 @@ test("future assignment failures explain the date without exposing provider deta
       return jsonResponse({ message: "permission denied: secret provider detail" }, 403);
     },
   }, new Date("2026-10-07T00:00:00.000Z"));
-  assert.equal(response.status, 502);
+  assert.equal(response.status, 503);
   assert.deepEqual(await response.json(), {
-    error: "The plate for 2026-10-08 could not be saved. Please try again.",
+    error: "Future planning is not enabled yet. Please ask the site administrator to apply the latest database migration, then try again.",
   });
 });
 

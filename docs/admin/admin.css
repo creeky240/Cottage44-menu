@@ -339,6 +339,30 @@ a:focus-visible {
   box-shadow: 0 12px 30px rgb(0 0 0 / 22%);
   color: var(--muted);
   transform: translateX(-50%);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.status__close {
+  flex: 0 0 auto;
+  min-width: 2rem;
+  min-height: 2rem;
+  margin: -0.35rem -0.35rem 0 0;
+  padding: 0.15rem 0.45rem;
+  border: 0;
+  border-radius: 0.35rem;
+  color: inherit;
+  background: transparent;
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.status__close:hover,
+.status__close:focus-visible {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
 .status[data-kind="error"] {

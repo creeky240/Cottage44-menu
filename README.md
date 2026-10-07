@@ -77,6 +77,27 @@ migrations that were already applied manually. See
 [the migration automation setup](docs/architecture.md#automated-supabase-migrations)
 for the exact one-time steps.
 
+### Future planning troubleshooting
+
+If the owner sees **“Future planning is not enabled yet”** when assigning
+tomorrow's or another future plate, the deployed Supabase project has not
+accepted `20261007130000_add_future_plate_planning.sql`. The API intentionally
+returns this actionable message for the RLS-denied response without exposing
+Supabase details. Check the `Cottage44_menu` environment configuration in
+GitHub Actions, then rerun the migration workflow by pushing a reviewed
+migration change or use the documented one-time history reconciliation only
+after verifying the SQL is already present in the intended project. Do not
+manually change production data from the dashboard or add a duplicate
+migration.
+
+If `supabase link` succeeds but `supabase db push` reports **password
+authentication failed for user postgres**, the project reference is reachable
+but `SUPABASE_DB_PASSWORD` is not the database password for that Supabase
+project. Re-copy the current database password from the project's database
+settings into the `Cottage44_menu` environment secret, removing any leading
+or trailing whitespace, and rerun the workflow. Do not substitute the
+Supabase access token, publishable key, or dashboard password.
+
 GitHub Pages is the current static deployment; Cloudflare Pages is the proposed
 production host. This backend foundation does not deploy Pages or change DNS.
 See [the architecture proposal](docs/architecture.md) for setup status.
