@@ -22,24 +22,39 @@ class Element {
     this.children.push(...elements);
   }
 
+  replaceChildren(...elements) {
+    this.children = elements;
+  }
+
   setAttribute(name, value) {
     this.attributes[name] = value;
   }
 
-  addEventListener(event, callback) {
+  removeAttribute(name) {
+    delete this.attributes[name];
+  }
+
+  addEventListener(event, callback, options) {
     this.listeners ??= {};
+    this.listenerOptions ??= {};
     this.listeners[event] = callback;
+    this.listenerOptions[event] = options;
   }
 }
 
-function createPage(theme = "light") {
+function createPage(theme = "light", fetchImpl = async () => jsonResponse({ plate: null })) {
   const elements = {
     "#category-nav": new Element("div"),
     "#menu-sections": new Element("div"),
+    "#today-plate": new Element("div"),
     ".theme-toggle": new Element("button"),
     ".theme-toggle__label": new Element("span"),
     'meta[name="theme-color"]': { content: "" },
   };
+  elements["#today-plate"].attributes["aria-busy"] = "true";
+  const initialStatus = new Element("p");
+  initialStatus.textContent = "Loading today's plate…";
+  elements["#today-plate"].append(initialStatus);
   const document = {
     documentElement: { dataset: { theme } },
     querySelector: (selector) => elements[selector],
@@ -53,6 +68,8 @@ function createPage(theme = "light") {
   const context = vm.createContext({
     document,
     localStorage,
+    fetch: fetchImpl,
+    URL,
     getComputedStyle: () => ({
       getPropertyValue: (property) =>
         property === "--color-page"
@@ -65,6 +82,54 @@ function createPage(theme = "light") {
 
   vm.runInContext(menuScript, context, { filename: "docs/menu.js" });
   return { document, elements, localStorage };
+}
+
+function jsonResponse(body, { status = 200, contentType = "application/json" } = {}) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: { get: (name) => name.toLowerCase() === "content-type" ? contentType : null },
+    json: async () => body,
+  };
+}
+
+function currentServiceDate() {
+  const parts = new Intl.DateTimeFormat("en-ZA", {
+    timeZone: "Africa/Johannesburg",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function validPlate(overrides = {}) {
+  return {
+    id: "8d2b48f2-7932-4ff0-9e80-7ac5efc438f0",
+    serviceDate: currentServiceDate(),
+    name: "Cottage burger",
+    description: "Beef, cheese and chips",
+    priceCents: 12500,
+    imageUrl: "https://images.example/plate.jpg",
+    ...overrides,
+  };
+}
+
+function findElement(element, predicate) {
+  if (predicate(element)) {
+    return element;
+  }
+  for (const child of element.children ?? []) {
+    const match = findElement(child, predicate);
+    if (match) {
+      return match;
+    }
+  }
+}
+
+function flushPromises() {
+  return new Promise((resolve) => setImmediate(resolve));
 }
 
 function runInitialThemeScript({ storedTheme = null, prefersDark = false } = {}) {
@@ -173,4 +238,117 @@ test("chooses a valid saved theme before the system preference", () => {
   assert.equal(runInitialThemeScript({ storedTheme: "light", prefersDark: true }), "light");
   assert.equal(runInitialThemeScript({ storedTheme: "invalid", prefersDark: true }), "dark");
   assert.equal(runInitialThemeScript({ storedTheme: "invalid" }), "light");
+});
+
+test("loads and renders today's plate accessibly using the same-origin API", async () => {
+  let resolveResponse;
+  let requestedUrl;
+  let requestOptions;
+  const responsePromise = new Promise((resolve) => {
+    resolveResponse = resolve;
+  });
+  const { elements } = createPage("light", (url, options) => {
+    requestedUrl = url;
+    requestOptions = options;
+    return responsePromise;
+  });
+
+  assert.equal(elements["#today-plate"].attributes["aria-busy"], "true");
+  assert.equal(elements["#today-plate"].children[0].textContent, "Loading today's plate…");
+  resolveResponse(jsonResponse({ plate: validPlate() }));
+  await flushPromises();
+
+  assert.equal(requestedUrl, "/api/plates/today");
+  assert.equal(requestOptions.headers.Accept, "application/json");
+  assert.equal(elements["#today-plate"].attributes["aria-busy"], "false");
+  const article = elements["#today-plate"].children[0];
+  const heading = findElement(article, (element) => element.tagName === "h3");
+  const description = findElement(article, (element) => element.className === "plate-card__description");
+  const date = findElement(article, (element) => element.tagName === "time");
+  const price = findElement(article, (element) => element.className === "plate-card__price");
+  const image = findElement(article, (element) => element.tagName === "img");
+
+  assert.equal(article.className, "plate-card");
+  assert.equal(heading.textContent, "Cottage burger");
+  assert.equal(description.textContent, "Beef, cheese and chips");
+  assert.equal(date.dateTime, currentServiceDate());
+  assert.equal(
+    price.textContent,
+    new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR" }).format(125),
+  );
+  assert.equal(image.alt, "Photo of Cottage burger");
+  assert.equal(image.loading, "lazy");
+});
+
+test("renders the empty state and optional-photo fallback without errors", async () => {
+  const empty = createPage();
+  await flushPromises();
+  assert.match(empty.elements["#today-plate"].children[0].textContent, /No plate has been announced/);
+  assert.equal(empty.elements["#today-plate"].attributes["aria-busy"], "false");
+
+  const noPhoto = createPage("light", async () => jsonResponse({
+    plate: validPlate({ imageUrl: null }),
+  }));
+  await flushPromises();
+  const fallback = findElement(
+    noPhoto.elements["#today-plate"],
+    (element) => element.className === "plate-card__image-fallback",
+  );
+  assert.equal(fallback.textContent, "Photo coming soon");
+  assert.equal(fallback.attributes.role, "img");
+  assert.equal(fallback.attributes["aria-label"], "No photo available");
+});
+
+test("uses a text fallback when the plate image fails to load", async () => {
+  const { elements } = createPage("light", async () =>
+    jsonResponse({ plate: validPlate() }),
+  );
+  await flushPromises();
+  const image = findElement(elements["#today-plate"], (element) => element.tagName === "img");
+  assert.equal(image.listenerOptions.error.once, true);
+  image.listeners.error();
+
+  const fallback = findElement(
+    elements["#today-plate"],
+    (element) => element.className === "plate-card__image-fallback",
+  );
+  assert.equal(fallback.textContent, "Photo unavailable");
+  assert.equal(fallback.attributes.role, "img");
+  assert.equal(fallback.attributes["aria-label"], "Photo unavailable");
+  assert.equal(findElement(elements["#today-plate"], (element) => element.tagName === "img"), undefined);
+});
+
+test("shows only a safe unavailable state for failed or stale API responses", async () => {
+  const cases = [
+    ["network failure", async () => { throw new Error("private network detail"); }],
+    ["HTTP failure", async () => jsonResponse({ secret: "private response" }, { status: 503 })],
+    ["HTML fallback", async () => jsonResponse("<html>not the API</html>", { contentType: "text/html" })],
+    ["malformed JSON", async () => ({
+      ok: true,
+      headers: { get: () => "application/json" },
+      json: async () => { throw new Error("private parser detail"); },
+    })],
+    ["stale service date", async () => jsonResponse({
+      plate: validPlate({ serviceDate: "2000-01-01" }),
+    })],
+    ["invalid image URL", async () => jsonResponse({
+      plate: validPlate({ imageUrl: "javascript:alert(1)" }),
+    })],
+    ["malformed payload", async () => jsonResponse({ plate: { name: "Missing fields" } })],
+  ];
+
+  for (const [label, fetchImpl] of cases) {
+    const { elements } = createPage("light", fetchImpl);
+    await flushPromises();
+    const content = elements["#today-plate"];
+    assert.match(content.children[0].textContent, /temporarily unavailable/, label);
+    assert.doesNotMatch(content.children[0].textContent, /private|secret|parser|network detail/, label);
+    assert.equal(content.attributes["aria-busy"], "false", label);
+  }
+});
+
+test("includes a labelled Plate of the Day live region in the page", () => {
+  assert.match(html, /<section class="plate-day" aria-labelledby="plate-day-title">/);
+  assert.match(html, /id="today-plate"[\s\S]*aria-live="polite"/);
+  assert.match(html, /id="plate-day-title">Plate of the Day<\/h2>/);
 });

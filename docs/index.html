@@ -64,6 +64,22 @@
         </a>
       </section>
 
+      <section class="plate-day" aria-labelledby="plate-day-title">
+        <div class="plate-day__intro">
+          <p class="plate-day__eyebrow">Fresh from our kitchen</p>
+          <h2 id="plate-day-title">Plate of the Day</h2>
+        </div>
+        <div
+          class="plate-day__content"
+          id="today-plate"
+          aria-live="polite"
+          aria-atomic="true"
+          aria-busy="true"
+        >
+          <p class="plate-day__status" role="status">Loading today's plate…</p>
+        </div>
+      </section>
+
       <nav class="category-nav" aria-label="Menu categories">
         <div class="category-nav__inner" id="category-nav"></div>
       </nav>

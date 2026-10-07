@@ -72,6 +72,7 @@ const categoryNav = document.querySelector("#category-nav");
 const menuSections = document.querySelector("#menu-sections");
 const themeToggle = document.querySelector(".theme-toggle");
 const themeLabel = document.querySelector(".theme-toggle__label");
+const todayPlate = document.querySelector("#today-plate");
 
 for (const { category, items } of menu) {
   const sectionId = `category-${category.toLowerCase()}`;
@@ -140,6 +141,168 @@ function setTheme(theme) {
     .trim();
 }
 
+function todayInSouthAfrica() {
+  const parts = new Intl.DateTimeFormat("en-ZA", {
+    timeZone: "Africa/Johannesburg",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function isValidServiceDate(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(date.getTime()) &&
+    date.toISOString().slice(0, 10) === value &&
+    value === todayInSouthAfrica();
+}
+
+function isValidPlate(value) {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.id === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.id) &&
+    typeof value.name === "string" &&
+    value.name.trim().length > 0 &&
+    value.name.length <= 120 &&
+    typeof value.description === "string" &&
+    value.description.length <= 1000 &&
+    Number.isSafeInteger(value.priceCents) &&
+    value.priceCents >= 0 &&
+    (value.imageUrl === null || (
+      typeof value.imageUrl === "string" &&
+      value.imageUrl.length <= 2048 &&
+      isHttpsUrl(value.imageUrl)
+    )) &&
+    isValidServiceDate(value.serviceDate)
+  );
+}
+
+function isHttpsUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
+
+function finishPlateState() {
+  todayPlate.setAttribute("aria-busy", "false");
+}
+
+function renderPlateMessage(message) {
+  const status = document.createElement("p");
+  status.className = "plate-day__status";
+  status.setAttribute("role", "status");
+  status.textContent = message;
+  todayPlate.replaceChildren(status);
+  finishPlateState();
+}
+
+function renderPlate(plate) {
+  const article = document.createElement("article");
+  article.className = "plate-card";
+
+  const imageFrame = document.createElement("div");
+  imageFrame.className = "plate-card__image-frame";
+  if (plate.imageUrl) {
+    const image = document.createElement("img");
+    image.className = "plate-card__image";
+    image.src = plate.imageUrl;
+    image.alt = `Photo of ${plate.name}`;
+    image.loading = "lazy";
+    image.addEventListener("error", () => {
+      image.hidden = true;
+      image.removeAttribute("src");
+      const fallback = document.createElement("span");
+      fallback.className = "plate-card__image-fallback";
+      fallback.setAttribute("role", "img");
+      fallback.setAttribute("aria-label", "Photo unavailable");
+      fallback.textContent = "Photo unavailable";
+      imageFrame.replaceChildren(fallback);
+    }, { once: true });
+    imageFrame.append(image);
+  } else {
+    const fallback = document.createElement("span");
+    fallback.className = "plate-card__image-fallback";
+    fallback.setAttribute("role", "img");
+    fallback.setAttribute("aria-label", "No photo available");
+    fallback.textContent = "Photo coming soon";
+    imageFrame.append(fallback);
+  }
+
+  const details = document.createElement("div");
+  details.className = "plate-card__details";
+  const name = document.createElement("h3");
+  name.className = "plate-card__name";
+  name.textContent = plate.name;
+  const description = document.createElement("p");
+  description.className = "plate-card__description";
+  description.textContent = plate.description;
+  const date = document.createElement("time");
+  date.className = "plate-card__date";
+  date.dateTime = plate.serviceDate;
+  date.textContent = new Intl.DateTimeFormat("en-ZA", {
+    dateStyle: "full",
+    timeZone: "Africa/Johannesburg",
+  }).format(new Date(`${plate.serviceDate}T12:00:00.000Z`));
+  const price = document.createElement("p");
+  price.className = "plate-card__price";
+  price.textContent = new Intl.NumberFormat("en-ZA", {
+    style: "currency",
+    currency: "ZAR",
+  }).format(plate.priceCents / 100);
+  details.append(name, description, date, price);
+  article.append(imageFrame, details);
+  todayPlate.replaceChildren(article);
+  finishPlateState();
+}
+
+async function loadTodayPlate() {
+  try {
+    const response = await fetch("/api/plates/today", {
+      headers: { Accept: "application/json" },
+    });
+    const contentType = response.headers.get("content-type")?.split(";")[0].trim().toLowerCase();
+    if (
+      !response.ok ||
+      (contentType !== "application/json" && !contentType?.endsWith("+json"))
+    ) {
+      throw new Error("Invalid today's plate response.");
+    }
+
+    const payload = await response.json();
+    if (
+      typeof payload !== "object" ||
+      payload === null ||
+      Array.isArray(payload) ||
+      !Object.hasOwn(payload, "plate")
+    ) {
+      throw new Error("Invalid today's plate response.");
+    }
+    if (payload.plate === null) {
+      renderPlateMessage("No plate has been announced for today. Please check back later.");
+      return;
+    }
+    if (!isValidPlate(payload.plate)) {
+      throw new Error("Invalid today's plate response.");
+    }
+    renderPlate(payload.plate);
+  } catch {
+    renderPlateMessage("Today's plate is temporarily unavailable. Please try again later.");
+  }
+}
+
+loadTodayPlate();
 setTheme(document.documentElement.dataset.theme);
 themeToggle.addEventListener("click", () => {
   const nextTheme =
