@@ -16,6 +16,11 @@ branch**, choose branch `main` and folder `/docs`, then save. The deployed
 `docs/CNAME` preserves the `menu.cottage44.co.za` custom domain. No Actions
 workflow is needed.
 
+This describes the current deployment only. GitHub Pages' usage policy may not
+permit a commercial restaurant website, so the proposed production destination
+is Cloudflare Pages. See [the architecture proposal](docs/architecture.md)
+before changing hosting or DNS.
+
 Menu items and prices are maintained in `docs/menu.js`. The light/dark theme
 preference is stored in the browser.
 
