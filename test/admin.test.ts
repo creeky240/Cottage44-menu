@@ -142,10 +142,11 @@ function recoveryRequest(
   body: unknown,
   url = `https://menu.example${path}`,
 ): Request {
+  const origin = new URL(url).origin;
   return new Request(url, {
     method: "POST",
     headers: {
-      Origin: "https://menu.example",
+      Origin: origin,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
@@ -183,6 +184,82 @@ test("password reset requests do not reveal whether an email belongs to the owne
   const redirect = new URLSearchParams(new URL(calls[0].url).search).get("redirect_to");
   assert.equal(redirect, "https://menu.example/api/admin/password-recovery/verify");
   assert.deepEqual(calls[0].body, { email: OWNER_EMAIL });
+});
+
+test("password reset uses the current trusted Cloudflare preview host without per-preview configuration", async () => {
+  const previewEnv: Env = {
+    SUPABASE_URL: env.SUPABASE_URL,
+    SUPABASE_PUBLISHABLE_KEY: env.SUPABASE_PUBLISHABLE_KEY,
+  };
+  const previewUrl =
+    "https://a110bed2.cottage44-menu-pages.pages.dev/api/admin/password-recovery";
+  let fetchCalls = 0;
+  let resetRedirect = "";
+  const response = await handlePasswordRecoveryRequest(
+    recoveryRequest("/api/admin/password-recovery", { email: OWNER_EMAIL }, previewUrl),
+    previewEnv,
+    {
+      fetchImpl: async (input) => {
+        fetchCalls += 1;
+        resetRedirect =
+          new URLSearchParams(new URL(String(input)).search).get("redirect_to") ?? "";
+        return jsonResponse({});
+      },
+    },
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(fetchCalls, 1);
+  assert.equal(
+    resetRedirect,
+    "https://a110bed2.cottage44-menu-pages.pages.dev/api/admin/password-recovery/verify",
+  );
+});
+
+test("password recovery fails safely for unconfigured custom hosts without contacting Supabase", async () => {
+  const previewEnv: Env = {
+    SUPABASE_URL: env.SUPABASE_URL,
+    SUPABASE_PUBLISHABLE_KEY: env.SUPABASE_PUBLISHABLE_KEY,
+  };
+  let fetchCalls = 0;
+  const response = await handlePasswordRecoveryRequest(
+    recoveryRequest(
+      "/api/admin/password-recovery",
+      { email: OWNER_EMAIL },
+      "https://unconfigured.example/api/admin/password-recovery",
+    ),
+    previewEnv,
+    { fetchImpl: async () => { fetchCalls += 1; return jsonResponse({}); } },
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 403);
+  assert.deepEqual(body, { error: "Forbidden." });
+  assert.equal(fetchCalls, 0);
+});
+
+test("password recovery reports missing Supabase configuration with a safe nested error", async () => {
+  const response = await handlePasswordRecoveryRequest(
+    recoveryRequest(
+      "/api/admin/password-recovery",
+      { email: OWNER_EMAIL },
+      "https://a110bed2.cottage44-menu-pages.pages.dev/api/admin/password-recovery",
+    ),
+    {},
+    {
+      logger: { error() {} },
+      fetchImpl: async () => { throw new Error("Should not call Supabase"); },
+    },
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 503);
+  assert.deepEqual(body, {
+    error: {
+      code: "SERVICE_UNAVAILABLE",
+      message: "The service is temporarily unavailable.",
+    },
+  });
 });
 
 test("recovery verification exchanges Supabase's recovery OTP server-side and sets a short HttpOnly cookie", async () => {

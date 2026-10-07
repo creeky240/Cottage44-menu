@@ -34,8 +34,30 @@ let todayPlateId = null;
 let savedImageUrl = null;
 
 function setStatus(message, kind = "") {
-  statusElement.textContent = message;
+  statusElement.textContent = typeof message === "string"
+    ? message
+    : "The request could not be completed. Please try again.";
   statusElement.dataset.kind = kind;
+}
+
+function apiErrorMessage(body, fallback) {
+  if (!body || typeof body !== "object" || !("error" in body)) {
+    return fallback;
+  }
+  const error = body.error;
+  if (typeof error === "string" && error.trim()) {
+    return error;
+  }
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof error.message === "string" &&
+    error.message.trim()
+  ) {
+    return error.message;
+  }
+  return fallback;
 }
 
 async function apiRequest(path, options = {}) {
@@ -69,7 +91,9 @@ async function apiRequest(path, options = {}) {
       showSignedOut();
       throw new Error("Your session expired. Please sign in again.");
     }
-    throw new Error(body.error || "The request could not be completed.");
+    throw new Error(
+      apiErrorMessage(body, "The request could not be completed. Please try again."),
+    );
   }
   return body;
 }
@@ -246,7 +270,7 @@ async function uploadSelectedImage() {
       showSignedOut();
       throw new Error("Your session expired. Please sign in again.");
     }
-    throw new Error(body.error || "The image could not be uploaded.");
+    throw new Error(apiErrorMessage(body, "The image could not be uploaded. Please try again."));
   }
   return body.imageUrl;
 }
@@ -317,7 +341,12 @@ recoveryRequestForm.addEventListener("submit", async (event) => {
       method: "POST",
       body: JSON.stringify({ email }),
     });
-    setStatus(result.message, "success");
+    setStatus(
+      typeof result.message === "string"
+        ? result.message
+        : "If the address belongs to the owner account, a password reset email will arrive shortly. Check the inbox and spam folder.",
+      "success",
+    );
   } catch (error) {
     setStatus(error.message, "error");
   }

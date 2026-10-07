@@ -26,8 +26,10 @@ project URL and publishable key. Start Pages locally with `npm run dev`.
 `.dev.vars` is ignored by Git and must not be committed. The admin UI and API
 require Cloudflare Pages; GitHub Pages serves only the static menu.
 Owner password resets use Supabase's one-time recovery email. Configure
-`ADMIN_SITE_URL` for each Pages environment and the exact Supabase redirect
-URLs and recovery email template as described in
+`ADMIN_SITE_URL` for the production custom domain and local development.
+Cloudflare Pages preview origins are resolved from the request only when they
+match this project's `*.cottage44-menu-pages.pages.dev` domain. Configure the
+Supabase redirect allow-list and recovery email template as described in
 [the setup notes](docs/architecture.md#local-setup-and-manual-account-steps).
 
 ## GitHub Pages

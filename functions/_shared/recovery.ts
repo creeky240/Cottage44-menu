@@ -1,5 +1,6 @@
 import {
   ConfigurationError,
+  OriginValidationError,
   readAdminSiteOrigin,
   readSupabaseConfig,
   type Env,
@@ -133,13 +134,20 @@ function redirectToAdmin(siteOrigin: string, result: "ready" | "invalid"): Respo
   });
 }
 
-function readConfig(env: Env, dependencies: AdminDependencies) {
+function readConfig(
+  env: Env,
+  request: Request,
+  dependencies: AdminDependencies,
+): { supabase: ReturnType<typeof readSupabaseConfig>; siteOrigin: string } | Response | null {
   try {
     return {
       supabase: readSupabaseConfig(env),
-      siteOrigin: readAdminSiteOrigin(env),
+      siteOrigin: readAdminSiteOrigin(env, request.url),
     };
   } catch (error) {
+    if (error instanceof OriginValidationError) {
+      return jsonResponse({ error: "Forbidden." }, 403);
+    }
     if (!(error instanceof ConfigurationError)) {
       throw error;
     }
@@ -161,7 +169,10 @@ export async function handlePasswordRecoveryRequest(
   if (!isSameOriginMutation(request)) {
     return jsonResponse({ error: "Forbidden." }, 403);
   }
-  const config = readConfig(env, dependencies);
+  const config = readConfig(env, request, dependencies);
+  if (config instanceof Response) {
+    return config;
+  }
   if (!config) {
     return serviceUnavailable();
   }
@@ -224,7 +235,10 @@ export async function handlePasswordRecoveryVerification(
   if (request.method !== "GET") {
     return jsonResponse({ error: "Method not allowed." }, 405);
   }
-  const config = readConfig(env, dependencies);
+  const config = readConfig(env, request, dependencies);
+  if (config instanceof Response) {
+    return config;
+  }
   if (!config) {
     return serviceUnavailable();
   }
@@ -298,7 +312,10 @@ export async function handlePasswordRecoveryUpdate(
     return jsonResponse({ error: "Forbidden." }, 403);
   }
 
-  const config = readConfig(env, dependencies);
+  const config = readConfig(env, request, dependencies);
+  if (config instanceof Response) {
+    return config;
+  }
   if (!config) {
     return serviceUnavailable();
   }

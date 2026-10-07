@@ -150,12 +150,16 @@ deletion protections have been enabled on both branches. The required status con
 The public Supabase URL and publishable/anon key are identifiers intended for
 browser use, not secrets; they are safe only when RLS is correctly configured.
 `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` are the only runtime bindings
-used by these Functions. Configure both under Cloudflare Pages **Preview** and
-**Production** environments with the same binding names. They identify the
-project and are not service credentials; RLS is the security boundary. Do not
-add a service-role key, database password, JWT signing secret, or deployment
-token to the app. Keep any unrelated deployment credentials out of the
-repository and public build output.
+used by the data Functions. Configure both under Cloudflare Pages **Preview**
+and **Production** environments with the same binding names. They identify
+the project and are not service credentials; RLS is the security boundary.
+The recovery Function also uses `ADMIN_SITE_URL` for the production custom
+domain and local development. PR/branch previews do not need a per-deployment
+setting: the Function accepts only this Pages project's
+`*.cottage44-menu-pages.pages.dev` hostnames and builds the callback from the
+current deployment origin. Do not add a service-role key, database password,
+JWT signing secret, or deployment token to the app. Keep any unrelated
+deployment credentials out of the repository and public build output.
 
 ## Cost and operational limits
 
@@ -216,19 +220,21 @@ References checked 7 October 2026:
    Functions. This work has not created a Pages project, deployed, or changed
    DNS. The runtime configuration values have not been supplied or written
    into this repository.
-7. In Cloudflare Pages **Settings → Variables and Secrets**, also set the
-   non-secret `ADMIN_SITE_URL` binding to the exact origin for each
-   environment (no trailing path): Production
-   `https://menu.cottage44.co.za`; Preview
-   `https://dev.cottage44-menu-pages.pages.dev`. For local Pages, use
-   `http://127.0.0.1:8788`.
+7. In Cloudflare Pages **Settings → Variables and Secrets**, set the non-secret
+   `ADMIN_SITE_URL` binding in **Production** to
+   `https://menu.cottage44.co.za` (origin only, no path). Do not set it per
+   Preview deployment: the recovery Function dynamically uses the request
+   origin only when it is the explicit configured production origin, local
+   origin, or under the exact project-owned
+   `cottage44-menu-pages.pages.dev` domain. For local Pages, use
+   `http://127.0.0.1:8788` in `.dev.vars`.
 8. In Supabase **Authentication → URL Configuration**, set **Site URL** to
-   `https://menu.cottage44.co.za` and add these exact entries under
-   **Redirect URLs**:
+   `https://menu.cottage44.co.za` and add these under **Redirect URLs**:
    `https://menu.cottage44.co.za/api/admin/password-recovery/verify` and
-   `https://dev.cottage44-menu-pages.pages.dev/api/admin/password-recovery/verify`.
-   Add `http://127.0.0.1:8788/api/admin/password-recovery/verify` only for
-   local development.
+   `https://*.cottage44-menu-pages.pages.dev/api/admin/password-recovery/verify`
+   (covers branch and immutable PR previews for this Pages project). Add
+   `http://127.0.0.1:8788/api/admin/password-recovery/verify` only for local
+   development.
 9. In Supabase **Authentication → Email Templates → Reset Password**, make
    the reset link point to the redirect URL with the one-time token hash,
    rather than the default confirmation URL:

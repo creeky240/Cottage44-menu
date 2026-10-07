@@ -274,6 +274,62 @@ test("admin UI remembers by default and completes sign-in, upload, save, and tod
   });
 });
 
+test("recovery UI displays nested API errors as human-readable messages", async () => {
+  const elements = Object.fromEntries(
+    adminSelectors.map((selector) => [selector, new Element()]),
+  );
+  elements["#dashboard"].hidden = true;
+  elements["#sign-out"].hidden = true;
+  elements["#recovery-request-panel"].hidden = true;
+  elements["#password-reset-panel"].hidden = true;
+  const requests = [];
+  const document = {
+    querySelector: (selector) => elements[selector],
+    createElement: () => new Element(),
+  };
+  const context = vm.createContext({
+    document,
+    fetch: async (url, options = {}) => {
+      requests.push({ url, options });
+      if (url === "/api/admin/session") {
+        return Response.json({ authenticated: false });
+      }
+      return Response.json(
+        {
+          error: {
+            code: "SERVICE_UNAVAILABLE",
+            message: "The service is temporarily unavailable.",
+          },
+        },
+        { status: 503 },
+      );
+    },
+    FormData: class {
+      get(name) {
+        return name === "email" ? "corne.dawson@gmail.com" : null;
+      }
+    },
+    URLSearchParams,
+    window: {
+      location: { search: "", pathname: "/admin/" },
+      history: { replaceState() {} },
+    },
+    console,
+  });
+
+  vm.runInContext(adminScript, context, { filename: "docs/admin/admin.js" });
+  await new Promise(setImmediate);
+  elements["#forgot-password"].listeners.click();
+  await elements["#recovery-request-form"].listeners.submit({ preventDefault() {} });
+
+  assert.equal(elements["#status"].textContent, "The service is temporarily unavailable.");
+  assert.doesNotMatch(elements["#status"].textContent, /\[object Object\]/);
+  assert.equal(
+    requests.filter(({ url }) => url === "/api/admin/password-recovery").length,
+    1,
+  );
+});
+
 test("verified recovery links show the password form and submit the confirmed password", async () => {
   const elements = Object.fromEntries(
     adminSelectors.map((selector) => [selector, new Element()]),
