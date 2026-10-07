@@ -55,12 +55,17 @@ artifact contains LCOV and text reports. CI does not deploy to a hosting
 provider.
 
 Successful CI runs on this repository upload `coverage/lcov.info` to Codecov.
-Fork pull requests still run checks and retain the coverage artifact, but skip
-the upload because they cannot access the Codecov environment secret. Browse
-coverage by file and branch on the
+Pull requests from forks use Codecov's public-repository tokenless path, so
+coverage can be reported without exposing the repository's Codecov secret.
+Browse coverage by file and branch on the
 [Codecov dashboard](https://app.codecov.io/gh/sdcreek240/Cottage44-menu). The
 dashboard and pull request comments require Codecov's GitHub App to be
 authorized for this repository.
+
+Pull requests into `dev` also receive a Cloudflare Pages preview comment from
+`.github/workflows/cloudflare-preview.yml`. The repository must have
+`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` configured as Actions
+secrets, and the Pages project must be named `cottage44-menu-pages`.
 
 ## Supabase migrations
 

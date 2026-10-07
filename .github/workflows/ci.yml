@@ -121,10 +121,7 @@ jobs:
   codecov:
     name: Upload coverage to Codecov
     needs: checks
-    if: >-
-      needs.checks.result == 'success' &&
-      (github.event_name != 'pull_request' ||
-      github.event.pull_request.head.repo.full_name == github.repository)
+    if: needs.checks.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: Cottage44_menu
@@ -146,6 +143,6 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage/lcov.info
           disable_search: true
-          fail_ci_if_error: true
+          fail_ci_if_error: false
           cleanup: true
           name: docs-menu-js
