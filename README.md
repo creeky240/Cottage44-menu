@@ -13,8 +13,16 @@ static file server.
 The static site is in `docs/`, with `docs/index.html` as its entry point.
 In the repository's **Settings → Pages**, set the source to **Deploy from a
 branch**, choose branch `main` and folder `/docs`, then save. The deployed
-`docs/CNAME` preserves the `menu.cottage44.co.za` custom domain. No Actions
-workflow is needed.
+`docs/CNAME` preserves the `menu.cottage44.co.za` custom domain. The Actions
+CI workflow checks changes but does not deploy the site.
+
+## Continuous integration
+
+The `CI / checks` job runs for pull requests and for pushes to `dev` or `main`.
+It installs from the lockfile, runs the menu tests, checks JavaScript syntax,
+and verifies the static entry point and stylesheet exist. There is no lint,
+typecheck, or build stage because the site has no application toolchain; CI
+does not deploy to a hosting provider.
 
 Menu items and prices are maintained in `docs/menu.js`. The light/dark theme
 preference is stored in the browser.
