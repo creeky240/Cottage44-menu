@@ -114,6 +114,26 @@
           </form>
         </section>
 
+        <section class="panel" aria-labelledby="planning-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Step 3 · Plan ahead</p>
+              <h2 id="planning-title">Plan a weekday</h2>
+            </div>
+          </div>
+          <p class="muted">Choose a date and a saved plate. You can prepare the whole week before Friday.</p>
+          <label for="schedule-date">Date to plan</label>
+          <input id="schedule-date" type="date">
+          <label for="schedule-select">Saved plate for that date</label>
+          <div class="inline-form">
+            <select id="schedule-select" aria-label="Choose a saved plate for the planned date"></select>
+            <button id="save-schedule" class="button" type="button">Save this day</button>
+          </div>
+          <p id="schedule-summary" class="muted"></p>
+          <h3 class="planner-subtitle">Quick plan for the next weekdays</h3>
+          <div id="weekly-plan-list" class="weekly-plan-list" aria-live="polite"></div>
+        </section>
+
         <section class="panel" aria-labelledby="saved-title">
           <h2 id="saved-title">Saved plates</h2>
           <ul id="plate-list" class="plate-list"></ul>

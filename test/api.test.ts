@@ -96,12 +96,12 @@ test("today query scopes Supabase to the Johannesburg date and returns null when
   });
 
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { plate: null });
+  assert.deepEqual(await response.json(), { plate: null, nextPlate: null });
   assert.equal(
-    requestedUrl?.searchParams.get("service_date"),
-    "eq.2026-10-07",
+    requestedUrl?.searchParams.getAll("service_date").join(","),
+    "gte.2026-10-07,lte.2026-10-08",
   );
-  assert.equal(requestedUrl?.searchParams.get("limit"), "1");
+  assert.equal(requestedUrl?.searchParams.get("limit"), "2");
   assert.equal(
     requestedUrl?.searchParams.get("select"),
     "service_date,plate:plates(id,name,description,price_cents,image_url)",
@@ -140,6 +140,34 @@ test("today handler allow-lists and sanitizes a valid database plate", async () 
       description: "Beef, cheese and chips",
       priceCents: 12500,
       imageUrl: "https://example.supabase.co/storage/v1/object/public/cottage44-plates/8d2b48f2-7932-4ff0-9e80-7ac5efc438f0.jpg",
+    },
+    nextPlate: null,
+  });
+});
+
+test("today handler returns a separately validated tomorrow plate", async () => {
+  const response = await handleTodayRequest(request(), env, {
+    now: new Date("2026-10-06T22:00:00.000Z"),
+    fetchImpl: async () => jsonResponse([{
+      service_date: "2026-10-08",
+      plate: {
+        id: "8d2b48f2-7932-4ff0-9e80-7ac5efc438f0",
+        name: "Tomorrow stew",
+        description: "Beef and vegetables",
+        price_cents: 12500,
+        image_url: null,
+      },
+    }]),
+  });
+  assert.deepEqual(await response.json(), {
+    plate: null,
+    nextPlate: {
+      id: "8d2b48f2-7932-4ff0-9e80-7ac5efc438f0",
+      serviceDate: "2026-10-08",
+      name: "Tomorrow stew",
+      description: "Beef and vegetables",
+      priceCents: 12500,
+      imageUrl: null,
     },
   });
 });

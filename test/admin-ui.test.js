@@ -63,6 +63,11 @@ const adminSelectors = [
   "#cancel-edit",
   "#editor-title",
   "#email",
+  "#schedule-date",
+  "#schedule-select",
+  "#save-schedule",
+  "#schedule-summary",
+  "#weekly-plan-list",
 ];
 
 test("admin theme defaults to dark and respects a saved shared theme", () => {

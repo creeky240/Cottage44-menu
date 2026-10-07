@@ -247,6 +247,37 @@ a:focus-visible {
   flex: 1;
 }
 
+#schedule-date {
+  max-width: 15rem;
+}
+
+.planner-subtitle {
+  margin: 1.5rem 0 0.5rem;
+  font-size: 1rem;
+}
+
+.weekly-plan-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.weekly-plan-row {
+  display: grid;
+  gap: 0.35rem;
+  grid-template-columns: minmax(8rem, 0.8fr) minmax(10rem, 1fr) auto;
+  align-items: end;
+}
+
+.weekly-plan-row label {
+  font-weight: 700;
+}
+
+@media (max-width: 42rem) {
+  .weekly-plan-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 .status {
   min-height: 1.4em;
   margin: 0;
