@@ -1,0 +1,73 @@
+name: Repair Supabase migration history
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type REPAIR_EXISTING_MIGRATIONS to reconcile the two manually applied migrations
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-migration-repair-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    name: Repair migration history and apply pending migrations
+    if: inputs.confirm == 'REPAIR_EXISTING_MIGRATIONS'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: Cottage44_menu
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Validate migration repair configuration
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$SUPABASE_ACCESS_TOKEN" || -z "$SUPABASE_DB_PASSWORD" || -z "$SUPABASE_PROJECT_REF" ]]; then
+            echo "::error::Configure SUPABASE_ACCESS_TOKEN and SUPABASE_DB_PASSWORD as Cottage44_menu environment secrets, and SUPABASE_PROJECT_REF as an environment variable."
+            exit 1
+          fi
+
+      - name: Link the configured Supabase project
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+        run: |
+          set -euo pipefail
+          supabase link \
+            --project-ref "$SUPABASE_PROJECT_REF" \
+            --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Reconcile manually applied migration history
+        run: |
+          set -euo pipefail
+          supabase migration repair \
+            --status applied \
+            20261007100000 \
+            20261007110000 \
+            --linked
+
+      - name: Apply the pending future-planning migration
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          supabase db push --linked --yes
