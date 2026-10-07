@@ -62,6 +62,10 @@ Browse coverage by file and branch on the
 dashboard and pull request comments require Codecov's GitHub App to be
 authorized for this repository.
 
+Feature pull requests must target `dev`. The `dev` branch is the integration
+branch; only reviewed, passing changes should be promoted from `dev` to
+`main` by a separate release pull request.
+
 Pull requests into `dev` also receive a Cloudflare Pages preview comment from
 `.github/workflows/cloudflare-preview.yml`. The repository must have
 `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` configured as Actions
