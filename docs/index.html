@@ -68,6 +68,7 @@
         <div class="plate-day__intro">
           <p class="plate-day__eyebrow">Fresh from our kitchen</p>
           <h2 id="plate-day-title">Plate of the Day</h2>
+          <p class="plate-day__notice">Orders can only be placed through the canteen until 15:00 (3:00 PM).</p>
         </div>
         <div
           class="plate-day__content"
@@ -77,6 +78,22 @@
           aria-busy="true"
         >
           <p class="plate-day__status" role="status">Loading today's plate…</p>
+        </div>
+      </section>
+      <section class="plate-day plate-day--next" aria-labelledby="next-plate-title">
+        <div class="plate-day__intro">
+          <p class="plate-day__eyebrow">Plan ahead</p>
+          <h2 id="next-plate-title">Tomorrow's Plate</h2>
+          <p class="plate-day__notice">Tomorrow's order should be confirmed with the canteen by today's 15:00 (3:00 PM) cutoff.</p>
+        </div>
+        <div
+          class="plate-day__content"
+          id="tomorrow-plate"
+          aria-live="polite"
+          aria-atomic="true"
+          aria-busy="true"
+        >
+          <p class="plate-day__status" role="status">Loading tomorrow's plate…</p>
         </div>
       </section>
 
@@ -95,6 +112,7 @@
     <footer class="site-footer">
       <div class="site-footer__brand">Cottage <span>44</span></div>
       <p class="site-footer__slogan">Happy Food, Happy You</p>
+      <a class="site-footer__admin" href="/admin/">Owner sign in</a>
       <div class="payment-notes" aria-label="Payment notes">
         <span>Airtime +18%</span>
         <span class="payment-notes__divider" aria-hidden="true"></span>

@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const html = await readFile(path.join(root, "docs/index.html"), "utf8");
+const styles = await readFile(path.join(root, "docs/styles.css"), "utf8");
 const menuScript = await readFile(path.join(root, "docs/menu.js"), "utf8");
 
 class Element {
@@ -42,16 +43,18 @@ class Element {
   }
 }
 
-function createPage(theme = "light", fetchImpl = async () => jsonResponse({ plate: null })) {
+function createPage(theme = "light", fetchImpl = async () => jsonResponse({ plate: null, nextPlate: null })) {
   const elements = {
     "#category-nav": new Element("div"),
     "#menu-sections": new Element("div"),
     "#today-plate": new Element("div"),
+    "#tomorrow-plate": new Element("div"),
     ".theme-toggle": new Element("button"),
     ".theme-toggle__label": new Element("span"),
     'meta[name="theme-color"]': { content: "" },
   };
   elements["#today-plate"].attributes["aria-busy"] = "true";
+  elements["#tomorrow-plate"].attributes["aria-busy"] = "true";
   const initialStatus = new Element("p");
   initialStatus.textContent = "Loading today's plate…";
   elements["#today-plate"].append(initialStatus);
@@ -255,7 +258,7 @@ test("loads and renders today's plate accessibly using the same-origin API", asy
 
   assert.equal(elements["#today-plate"].attributes["aria-busy"], "true");
   assert.equal(elements["#today-plate"].children[0].textContent, "Loading today's plate…");
-  resolveResponse(jsonResponse({ plate: validPlate() }));
+  resolveResponse(jsonResponse({ plate: validPlate(), nextPlate: null }));
   await flushPromises();
 
   assert.equal(requestedUrl, "/api/plates/today");
@@ -288,6 +291,7 @@ test("renders the empty state and optional-photo fallback without errors", async
 
   const noPhoto = createPage("light", async () => jsonResponse({
     plate: validPlate({ imageUrl: null }),
+    nextPlate: null,
   }));
   await flushPromises();
   const fallback = findElement(
@@ -299,9 +303,26 @@ test("renders the empty state and optional-photo fallback without errors", async
   assert.equal(fallback.attributes["aria-label"], "No photo available");
 });
 
+test("renders tomorrow's scheduled plate separately from today's empty state", async () => {
+  const tomorrow = new Date(`${currentServiceDate()}T00:00:00.000Z`);
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  const tomorrowDate = tomorrow.toISOString().slice(0, 10);
+  const { elements } = createPage("light", async () => jsonResponse({
+    plate: null,
+    nextPlate: validPlate({ serviceDate: tomorrowDate, name: "Tomorrow stew" }),
+  }));
+  await flushPromises();
+  assert.match(elements["#today-plate"].children[0].textContent, /No plate/);
+  assert.equal(
+    findElement(elements["#tomorrow-plate"], (element) => element.tagName === "h3").textContent,
+    "Tomorrow stew",
+  );
+  assert.equal(elements["#tomorrow-plate"].attributes["aria-busy"], "false");
+});
+
 test("uses a text fallback when the plate image fails to load", async () => {
   const { elements } = createPage("light", async () =>
-    jsonResponse({ plate: validPlate() }),
+    jsonResponse({ plate: validPlate(), nextPlate: null }),
   );
   await flushPromises();
   const image = findElement(elements["#today-plate"], (element) => element.tagName === "img");
@@ -351,4 +372,20 @@ test("includes a labelled Plate of the Day live region in the page", () => {
   assert.match(html, /<section class="plate-day" aria-labelledby="plate-day-title">/);
   assert.match(html, /id="today-plate"[\s\S]*aria-live="polite"/);
   assert.match(html, /id="plate-day-title">Plate of the Day<\/h2>/);
+  assert.match(
+    html,
+    /class="plate-day__notice">Orders can only be placed through the canteen until 15:00 \(3:00 PM\)\.<\/p>/,
+  );
+});
+
+test("provides a subtle owner sign-in link in the public site footer", () => {
+  assert.match(
+    html,
+    /<a class="site-footer__admin" href="\/admin\/">Owner sign in<\/a>/,
+  );
+});
+
+test("uses the exact Cottage 44 red accent in both public light and dark themes", () => {
+  assert.match(styles, /--brand-accent:\s*#C12025;/);
+  assert.match(styles, /:root\[data-theme="dark"\][\s\S]*?--color-accent:\s*#C12025;/);
 });

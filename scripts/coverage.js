@@ -5,10 +5,13 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const sourcePath = path.join(root, "docs/menu.js");
+const sourcePaths = [
+  path.join(root, "docs/menu.js"),
+  path.join(root, "docs/admin/admin.js"),
+];
 const outputDirectory = path.join(root, "coverage");
 
-export function buildCoverageReport(source, scriptEntries) {
+export function buildCoverageReport(source, scriptEntries, relativeSource = "docs/menu.js") {
   const mergedRanges = new Map();
   const functions = new Map();
 
@@ -88,7 +91,7 @@ export function buildCoverageReport(source, scriptEntries) {
 
   const lcov = [
     "TN:",
-    `SF:${path.relative(root, sourcePath).split(path.sep).join("/")}`,
+    `SF:${relativeSource}`,
     ...namedFunctions.flatMap(({ line, lcovName, count }) => [
       `FN:${line},${lcovName}`,
       `FNDA:${count},${lcovName}`,
@@ -103,41 +106,68 @@ export function buildCoverageReport(source, scriptEntries) {
   ].join("\n");
 
   const summary = [
-    "JavaScript source coverage (Node.js built-in V8 coverage)",
-    "Scope: docs/menu.js only. HTML, CSS, and the inline HTML script are not measured.",
-    `Lines: ${percentage(linesHit, lineHits.length)} (${linesHit}/${lineHits.length})`,
-    `Functions: ${percentage(functionsHit, namedFunctions.length)} (${functionsHit}/${namedFunctions.length})`,
-    "LCOV report: coverage/lcov.info",
-    "",
+    `${relativeSource}:`,
+    `  Lines: ${percentage(linesHit, lineHits.length)} (${linesHit}/${lineHits.length})`,
+    `  Functions: ${percentage(functionsHit, namedFunctions.length)} (${functionsHit}/${namedFunctions.length})`,
   ].join("\n");
 
   return { lcov, summary };
 }
 
 async function writeCoverageReport(coverageDirectory) {
-  const source = await readFile(sourcePath, "utf8");
   const coverageFiles = (await readdir(coverageDirectory)).filter((file) =>
     file.endsWith(".json"),
   );
-  const sourceUrl = pathToFileURL(sourcePath).href;
-  const sourceEntries = [];
+  const reports = [];
 
   for (const file of coverageFiles) {
     const report = JSON.parse(
       await readFile(path.join(coverageDirectory, file), "utf8"),
     );
-    for (const script of report.result ?? []) {
-      if (script.url === sourceUrl || script.url === "docs/menu.js") {
-        sourceEntries.push(script);
+    for (const sourcePath of sourcePaths) {
+      const sourceUrl = pathToFileURL(sourcePath).href;
+      const sourceEntries = (report.result ?? []).filter(
+        (script) => script.url === sourceUrl ||
+          script.url === path.relative(root, sourcePath),
+      );
+      if (sourceEntries.length > 0) {
+        reports.push({
+          sourcePath,
+          sourceEntries,
+        });
       }
     }
   }
 
-  if (sourceEntries.length === 0) {
-    throw new Error("Node did not report V8 coverage for docs/menu.js");
+  if (reports.length === 0) {
+    throw new Error("Node did not report V8 coverage for the frontend scripts");
   }
 
-  const { lcov, summary } = buildCoverageReport(source, sourceEntries);
+  const reportByPath = new Map();
+  for (const report of reports) {
+    reportByPath.set(report.sourcePath, report.sourceEntries);
+  }
+  const reportResults = [];
+  for (const sourcePath of sourcePaths) {
+    const sourceEntries = reportByPath.get(sourcePath);
+    if (!sourceEntries) {
+      continue;
+    }
+    const source = await readFile(sourcePath, "utf8");
+    reportResults.push(buildCoverageReport(
+      source,
+      sourceEntries,
+      path.relative(root, sourcePath).split(path.sep).join("/"),
+    ));
+  }
+  const lcov = reportResults.map(({ lcov: result }) => result).join("");
+  const summary = [
+    "JavaScript source coverage (Node.js built-in V8 coverage)",
+    "Scope: docs/menu.js and docs/admin/admin.js. HTML, CSS, and inline HTML scripts are not measured.",
+    ...reportResults.map(({ summary: result }) => result),
+    "LCOV report: coverage/lcov.info",
+    "",
+  ].join("\n");
   await mkdir(outputDirectory, { recursive: true });
   await Promise.all([
     writeFile(path.join(outputDirectory, "lcov.info"), lcov),

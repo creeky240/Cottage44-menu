@@ -76,6 +76,26 @@ authenticated owner session. A checked **Remember me** choice (default) gives
 the cookie a 30-day lifetime; unchecked sessions use a browser-session cookie
 without a persistent expiry.
 Supabase refresh responses preserve the selected duration.
+Password reset requests return the same response for every email and only
+send mail to the configured owner. The reset email's one-time token hash is
+exchanged by a Pages Function; after it verifies the owner with Supabase, a
+short-lived `HttpOnly` recovery cookie is set. The password update validates
+that cookie against Supabase again before updating the password. Neither
+recovery tokens nor session tokens are exposed to browser JavaScript or
+stored in local storage. Supabase Auth's email rate limits apply to reset
+requests. If Supabase rejects the send or is unavailable, the page shows a
+generic retry-later message rather than saying an email was sent; logs record
+only the upstream HTTP status, never its body or the submitted address.
+
+Supabase's built-in SMTP is best-effort and currently permits only two emails
+per project per hour, and only to addresses belonging to the Supabase
+organization team. The `/auth/v1/recover` endpoint also defaults to a
+60-second per-user cooldown. A 429 response is surfaced as a generic
+retry-later message; wait at least one minute between attempts and check
+**Authentication → SMTP Settings** and **Authentication → Rate Limits**.
+For reliable delivery to an address that is not on the organization team,
+configure a custom SMTP provider; do not repeatedly request resets to test
+delivery.
 
 The server accepts only `corne.dawson@gmail.com`, verified against the
 Supabase Auth user email on sign-in and on every request. It does not trust
@@ -118,6 +138,17 @@ Admin writes only accept public URLs from this bucket.
 
 Cloudflare Pages setup and DNS changes are outside this implementation.
 
+### Current external cutover blocker
+
+The verified `dev.cottage44-menu-pages.pages.dev` and
+`cottage44-menu-pages.pages.dev` deployments serve the menu, admin page, and
+JSON Functions correctly. The custom domain `menu.cottage44.co.za` still
+serves GitHub Pages and returns 404 for the API routes, so the owner workflow
+cannot work there yet. This is an external Cloudflare custom-domain/DNS
+cutover task, not an application defect; do not change DNS as part of an app
+code review. Until the cutover is completed, use the Cloudflare Pages URL for
+admin sign-in and API-backed menu data.
+
 ## CI/CD and repository rules
 
 Use GitHub Actions for pull-request checks and branch pushes. The intended gate
@@ -137,17 +168,80 @@ deployment should run only after a validated update reaches `main`.
 The PR, administrator-enforcement, conversation-resolution, force-push, and
 deletion protections have been enabled on both branches. The required status context is `checks`, with strict up-to-date checks enabled.
 
+### Automated Supabase migrations
+
+The existing `.github/workflows/ci.yml` detects migration changes on pushes to
+`dev` or `main` after the `checks` job passes. Only when files under
+`supabase/migrations/` changed, the `Apply Supabase migrations` job uses the
+`Cottage44_menu` GitHub environment and Supabase CLI to link the configured
+project and run `supabase db push --linked --yes`. The CLI applies only
+migrations missing from that project's migration history. Existing CI check
+names and the Cloudflare/GitHub Pages deployment configuration are unchanged.
+
+Before the first migration-triggering push, configure the existing GitHub
+environment at **Settings → Environments → Cottage44_menu**:
+
+| Kind | Name | Value |
+| --- | --- | --- |
+| Environment secret | `SUPABASE_ACCESS_TOKEN` | A Supabase personal access token |
+| Environment secret | `SUPABASE_DB_PASSWORD` | The database password for the intended Supabase project |
+| Environment variable | `SUPABASE_PROJECT_REF` | The project reference from that project's Supabase dashboard URL |
+
+The project ref is an identifier, not a credential. Do not put any of these
+values in repository files, workflow YAML, or command output. The secrets and
+variable must point to the existing project where the migrations below were
+already applied manually.
+
+Supabase may not know about SQL run directly in its SQL editor. Before
+automation is used, verify in that exact project that both schemas and policies
+from the migrations are already present, then run this one-time history
+reconciliation from the repository root. It records the two known migrations
+as applied; it does not execute or validate their SQL. Do not run it against a
+different or empty project.
+
+```sh
+read -rsp "Supabase access token: " SUPABASE_ACCESS_TOKEN
+export SUPABASE_ACCESS_TOKEN
+printf '\n'
+read -rsp "Supabase database password: " SUPABASE_DB_PASSWORD
+export SUPABASE_DB_PASSWORD
+printf '\n'
+read -rp "Supabase project ref: " SUPABASE_PROJECT_REF
+export SUPABASE_PROJECT_REF
+
+npx supabase@latest link \
+  --project-ref "$SUPABASE_PROJECT_REF" \
+  --password "$SUPABASE_DB_PASSWORD"
+npx supabase@latest migration repair --status applied \
+  20261007100000 20261007110000 \
+  --linked
+
+unset SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD SUPABASE_PROJECT_REF
+```
+
+The migration versions correspond to
+`20261007100000_create_plates_and_daily_plates.sql` and
+`20261007110000_add_owner_admin_and_plate_images.sql`. The `.temp` CLI link
+state is ignored by Git. After reconciliation, pushes containing new migration
+files to either branch automatically apply pending migrations to the configured
+project. Add future schema changes as new, timestamped SQL migration files;
+editing an already-applied migration does not reapply it to the database.
+
 ## Environment and secrets
 
 The public Supabase URL and publishable/anon key are identifiers intended for
 browser use, not secrets; they are safe only when RLS is correctly configured.
 `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` are the only runtime bindings
-used by these Functions. Configure both under Cloudflare Pages **Preview** and
-**Production** environments with the same binding names. They identify the
-project and are not service credentials; RLS is the security boundary. Do not
-add a service-role key, database password, JWT signing secret, or deployment
-token to the app. Keep any unrelated deployment credentials out of the
-repository and public build output.
+used by the data Functions. Configure both under Cloudflare Pages **Preview**
+and **Production** environments with the same binding names. They identify
+the project and are not service credentials; RLS is the security boundary.
+The recovery Function also uses `ADMIN_SITE_URL` for the production custom
+domain and local development. PR/branch previews do not need a per-deployment
+setting: the Function accepts only this Pages project's
+`*.cottage44-menu-pages.pages.dev` hostnames and builds the callback from the
+current deployment origin. Do not add a service-role key, database password,
+JWT signing secret, or deployment token to the app. Keep any unrelated
+deployment credentials out of the repository and public build output.
 
 ## Cost and operational limits
 
@@ -183,11 +277,12 @@ References checked 7 October 2026:
    email in the dashboard if the project requires confirmation. Do not grant
    access through user-editable metadata. Password resets are managed through
    Supabase Auth.
-3. Review and apply, in order, the migrations
+3. The migrations
    `20261007100000_create_plates_and_daily_plates.sql` and
-   `20261007110000_add_owner_admin_and_plate_images.sql` to the intended
-   project using its SQL editor. The latter creates the bucket and owner-only
-   database/Storage policies. It has not been applied remotely by this work.
+   `20261007110000_add_owner_admin_and_plate_images.sql` have already been
+   applied manually to the existing Supabase project. If setting up automation
+   for that project, follow the one-time migration-history reconciliation
+   above before adding or pushing future migrations.
 4. For local development, run `npm ci`, copy `.env.example` to `.dev.vars`,
    and replace placeholders locally (do not commit the file):
 
@@ -208,3 +303,36 @@ References checked 7 October 2026:
    Functions. This work has not created a Pages project, deployed, or changed
    DNS. The runtime configuration values have not been supplied or written
    into this repository.
+7. In Cloudflare Pages **Settings → Variables and Secrets**, set the non-secret
+   `ADMIN_SITE_URL` binding in **Production** to
+   `https://menu.cottage44.co.za` (origin only, no path). Do not set it per
+   Preview deployment: the recovery Function dynamically uses the request
+   origin only when it is the explicit configured production origin, local
+   origin, or under the exact project-owned
+   `cottage44-menu-pages.pages.dev` domain. For local Pages, use
+   `http://127.0.0.1:8788` in `.dev.vars`.
+8. In Supabase **Authentication → URL Configuration**, set **Site URL** to
+   `https://menu.cottage44.co.za` and add these under **Redirect URLs**:
+   `https://menu.cottage44.co.za/api/admin/password-recovery/verify` and
+   `https://*.cottage44-menu-pages.pages.dev/api/admin/password-recovery/verify`
+   (covers branch and immutable PR previews for this Pages project). Add
+   `http://127.0.0.1:8788/api/admin/password-recovery/verify` only for local
+   development.
+9. In Supabase **Authentication → Email Templates → Reset Password**, make
+   the reset link point to the redirect URL with the one-time token hash,
+   rather than the default confirmation URL:
+
+   ```html
+   <a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&amp;type=recovery">Reset password</a>
+   ```
+
+   The function verifies this recovery token and owner account before it
+   displays the new-password form. The email URL is one-time; if it expires,
+   request another reset email.
+10. If reset mail does not arrive, first check **Authentication → SMTP
+    Settings** and **Authentication → Rate Limits**. Supabase's built-in SMTP
+    only sends to organization-team addresses and is limited to two emails
+    per project per hour; `/auth/v1/recover` also applies a default 60-second
+    per-user cooldown. Wait before another attempt. For delivery to other
+    addresses or production use, configure a custom SMTP provider in Supabase
+    **Authentication → SMTP Settings**.

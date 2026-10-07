@@ -1,8 +1,18 @@
 "use strict";
 
 const statusElement = document.querySelector("#status");
+const signInSubmit = document.querySelector("#sign-in-submit");
 const signInPanel = document.querySelector("#sign-in-panel");
 const signInForm = document.querySelector("#sign-in-form");
+const recoveryRequestPanel = document.querySelector("#recovery-request-panel");
+const recoveryRequestForm = document.querySelector("#recovery-request-form");
+const recoverySubmit = document.querySelector("#recovery-submit");
+const passwordResetPanel = document.querySelector("#password-reset-panel");
+const passwordResetForm = document.querySelector("#password-reset-form");
+const passwordResetSubmit = document.querySelector("#password-reset-submit");
+const forgotPasswordButton = document.querySelector("#forgot-password");
+const backToSignInButton = document.querySelector("#back-to-sign-in");
+const backFromPasswordResetButton = document.querySelector("#back-from-password-reset");
 const dashboard = document.querySelector("#dashboard");
 const signOutButton = document.querySelector("#sign-out");
 const plateForm = document.querySelector("#plate-form");
@@ -12,6 +22,9 @@ const descriptionInput = document.querySelector("#plate-description");
 const priceInput = document.querySelector("#plate-price");
 const imageInput = document.querySelector("#plate-image");
 const imageNote = document.querySelector("#image-note");
+const imagePreview = document.querySelector("#image-preview");
+const imagePreviewImage = document.querySelector("#image-preview-image");
+const clearImageButton = document.querySelector("#clear-image");
 const plateList = document.querySelector("#plate-list");
 const historyList = document.querySelector("#history-list");
 const todaySelect = document.querySelector("#today-select");
@@ -20,15 +33,72 @@ const serviceDate = document.querySelector("#service-date");
 const setTodayButton = document.querySelector("#set-today");
 const newPlateButton = document.querySelector("#new-plate");
 const cancelEditButton = document.querySelector("#cancel-edit");
+const scheduleDateInput = document.querySelector("#schedule-date");
+const scheduleSelect = document.querySelector("#schedule-select");
+const saveScheduleButton = document.querySelector("#save-schedule");
+const savePlateButton = document.querySelector("#save-plate");
+const scheduleSummary = document.querySelector("#schedule-summary");
+const weeklyPlanList = document.querySelector("#weekly-plan-list");
 
 let plates = [];
 let history = [];
 let todayPlateId = null;
 let savedImageUrl = null;
+let previewObjectUrl = null;
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_IMAGE_DIMENSION = 2000;
+const SOURCE_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+]);
 
 function setStatus(message, kind = "") {
-  statusElement.textContent = message;
+  const text = typeof message === "string"
+    ? message
+    : "The request could not be completed. Please try again.";
+  statusElement.textContent = text;
   statusElement.dataset.kind = kind;
+  statusElement.hidden = !text;
+  statusElement.setAttribute("aria-live", kind === "error" ? "assertive" : "polite");
+}
+
+function beginBusy(button, label) {
+  if (button.disabled) {
+    return false;
+  }
+  button.disabled = true;
+  button.dataset.originalLabel = button.textContent;
+  button.textContent = label;
+  return true;
+}
+
+function endBusy(button) {
+  button.disabled = false;
+  button.textContent = button.dataset.originalLabel || button.textContent;
+  delete button.dataset.originalLabel;
+}
+
+function apiErrorMessage(body, fallback) {
+  if (!body || typeof body !== "object" || !("error" in body)) {
+    return fallback;
+  }
+  const error = body.error;
+  if (typeof error === "string" && error.trim()) {
+    return error;
+  }
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof error.message === "string" &&
+    error.message.trim()
+  ) {
+    return error.message;
+  }
+  return fallback;
 }
 
 async function apiRequest(path, options = {}) {
@@ -54,11 +124,17 @@ async function apiRequest(path, options = {}) {
     throw new Error("The server returned an unreadable response.");
   }
   if (!response.ok) {
-    if (response.status === 401) {
+    const method = options.method ?? "GET";
+    const requiresSession = path === "/api/admin/session"
+      ? method !== "POST" && method !== "DELETE"
+      : !path.startsWith("/api/admin/password-recovery");
+    if (response.status === 401 && requiresSession) {
       showSignedOut();
       throw new Error("Your session expired. Please sign in again.");
     }
-    throw new Error(body.error || "The request could not be completed.");
+    throw new Error(
+      apiErrorMessage(body, "The request could not be completed. Please try again."),
+    );
   }
   return body;
 }
@@ -66,6 +142,8 @@ async function apiRequest(path, options = {}) {
 function showSignedOut() {
   dashboard.hidden = true;
   signOutButton.hidden = true;
+  recoveryRequestPanel.hidden = true;
+  passwordResetPanel.hidden = true;
   signInPanel.hidden = false;
 }
 
@@ -137,7 +215,109 @@ function renderPlateList() {
     plateList.append(item);
   }
   setTodayButton.disabled = plates.length === 0;
+  scheduleSelect.replaceChildren();
+  const schedulePlaceholder = document.createElement("option");
+  schedulePlaceholder.value = "";
+  schedulePlaceholder.textContent = plates.length ? "Select a saved plate" : "Save a plate first";
+  scheduleSelect.append(schedulePlaceholder);
+  for (const plate of plates) {
+    const option = document.createElement("option");
+    option.value = plate.id;
+    option.textContent = plate.name;
+    scheduleSelect.append(option);
+  }
   updateTodaySummary();
+  updateScheduleSummary();
+}
+
+function updateScheduleSummary() {
+  const selected = plates.find((plate) => plate.id === scheduleSelect.value);
+  scheduleSummary.textContent = selected && scheduleDateInput.value
+    ? `${selected.name} is ready to be planned for ${scheduleDateInput.value}.`
+    : "Choose a date and saved plate.";
+}
+
+function planningWeekdays(startDate) {
+  const dates = [];
+  const date = new Date(`${startDate}T00:00:00.000Z`);
+  while (dates.length < 5) {
+    const day = date.getUTCDay();
+    if (day !== 0 && day !== 6) {
+      dates.push(date.toISOString().slice(0, 10));
+    }
+    date.setUTCDate(date.getUTCDate() + 1);
+  }
+  return dates;
+}
+
+function addDays(value, amount) {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + amount);
+  return date.toISOString().slice(0, 10);
+}
+
+function renderWeeklyPlan() {
+  weeklyPlanList.replaceChildren();
+  if (!serviceDate.textContent) {
+    return;
+  }
+  const assignments = new Map(history.map((item) => [item.serviceDate, item.plate]));
+  for (const date of planningWeekdays(serviceDate.textContent)) {
+    const row = document.createElement("div");
+    row.className = "weekly-plan-row";
+    const label = document.createElement("label");
+    label.textContent = new Intl.DateTimeFormat("en-ZA", {
+      weekday: "long",
+      day: "numeric",
+      month: "short",
+      timeZone: "Africa/Johannesburg",
+    }).format(new Date(`${date}T12:00:00.000Z`));
+    const select = document.createElement("select");
+    select.setAttribute("aria-label", `Saved plate for ${label.textContent}`);
+    const empty = document.createElement("option");
+    empty.value = "";
+    empty.textContent = "Not planned";
+    select.append(empty);
+    for (const plate of plates) {
+      const option = document.createElement("option");
+      option.value = plate.id;
+      option.textContent = plate.name;
+      select.append(option);
+    }
+    const existing = assignments.get(date);
+    if (existing) {
+      select.value = existing.id;
+    }
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "button button--secondary";
+    button.textContent = "Save";
+    button.addEventListener("click", async () => {
+      if (!beginBusy(button, "Saving…")) {
+        return;
+      }
+      if (!select.value) {
+        setStatus("Choose a saved plate for this day first.", "error");
+        endBusy(button);
+        return;
+      }
+      setStatus(`Saving the plate for ${label.textContent}…`);
+      try {
+        const result = await apiRequest("/api/admin/plates/today", {
+          method: "POST",
+          body: JSON.stringify({ serviceDate: date, plateId: select.value }),
+        });
+        await loadDashboard();
+        setStatus(`${result.today.plate.name} planned for ${date}.`, "success");
+      } catch (error) {
+        setStatus(`Could not save ${label.textContent}. ${error.message}`, "error");
+      } finally {
+        endBusy(button);
+      }
+    });
+    row.append(label, select, button);
+    weeklyPlanList.append(row);
+  }
 }
 
 function renderHistory() {
@@ -173,21 +353,79 @@ async function loadDashboard() {
     history = daily.history;
     todayPlateId = daily.today?.id ?? null;
     serviceDate.textContent = daily.serviceDate;
+    scheduleDateInput.min = daily.serviceDate;
+    scheduleDateInput.max = addDays(daily.serviceDate, 365);
+    scheduleDateInput.value ||= daily.serviceDate;
     renderPlateList();
+    renderWeeklyPlan();
     renderHistory();
     setStatus("");
   } catch (error) {
     setStatus(error.message, "error");
   }
+
+  scheduleDateInput.addEventListener("change", updateScheduleSummary);
+  scheduleSelect.addEventListener("change", updateScheduleSummary);
+
+  saveScheduleButton.addEventListener("click", async () => {
+    if (!beginBusy(saveScheduleButton, "Saving…")) {
+      return;
+    }
+    if (!scheduleDateInput.value || !scheduleSelect.value) {
+      setStatus("Choose a date and saved plate first.", "error");
+      endBusy(saveScheduleButton);
+      return;
+    }
+    setStatus("Saving the planned plate…");
+    try {
+      const result = await apiRequest("/api/admin/plates/today", {
+        method: "POST",
+        body: JSON.stringify({
+          serviceDate: scheduleDateInput.value,
+          plateId: scheduleSelect.value,
+        }),
+      });
+      await loadDashboard();
+      setStatus(`${result.today.plate.name} planned for ${result.today.serviceDate}.`, "success");
+    } catch (error) {
+      setStatus(`Could not save ${scheduleDateInput.value}. ${error.message}`, "error");
+    } finally {
+      endBusy(saveScheduleButton);
+    }
+  });
 }
 
 function resetForm() {
   plateForm.reset();
   plateIdInput.value = "";
   savedImageUrl = null;
-  imageNote.textContent = "No photo selected. Choosing a new image replaces the saved photo.";
+  imageNote.textContent = "Choose a photo from your camera or gallery. It will be resized and saved as a web-friendly image (up to 5 MB).";
+  clearImagePreview();
   cancelEditButton.hidden = true;
   document.querySelector("#editor-title").textContent = "Plate details";
+}
+
+function clearImagePreview() {
+  if (previewObjectUrl) {
+    URL.revokeObjectURL(previewObjectUrl);
+    previewObjectUrl = null;
+  }
+  imagePreviewImage.removeAttribute("src");
+  imagePreviewImage.alt = "";
+  imagePreview.hidden = true;
+}
+
+function showImagePreview(source, alt, isLocalPreview = false) {
+  clearImagePreview();
+  if (!source) {
+    return;
+  }
+  if (isLocalPreview) {
+    previewObjectUrl = source;
+  }
+  imagePreviewImage.src = source;
+  imagePreviewImage.alt = alt;
+  imagePreview.hidden = false;
 }
 
 function editPlate(plate) {
@@ -198,29 +436,74 @@ function editPlate(plate) {
   imageInput.value = "";
   savedImageUrl = plate.imageUrl;
   imageNote.textContent = savedImageUrl
-    ? "A saved photo will be kept unless you choose a replacement."
+    ? "Saved photo shown below. It will be kept unless you choose a replacement."
     : "No saved photo. Add one if you want a photo with this plate.";
+  showImagePreview(savedImageUrl, `Saved photo of ${plate.name}`);
   cancelEditButton.hidden = false;
   document.querySelector("#editor-title").textContent = `Edit ${plate.name}`;
   nameInput.focus();
 }
+
+imageInput.addEventListener("change", () => {
+  const image = imageInput.files[0];
+  if (!image) {
+    showImagePreview(savedImageUrl, savedImageUrl ? "Saved plate photo" : "");
+    imageNote.textContent = savedImageUrl
+      ? "Saved photo will be kept. Choose another photo to replace it."
+      : "No photo selected. This plate will be saved without a photo.";
+    return;
+  }
+  if (!SOURCE_IMAGE_TYPES.has(image.type.toLowerCase())) {
+    imageInput.value = "";
+    showImagePreview(savedImageUrl, savedImageUrl ? "Saved plate photo" : "");
+    imageNote.textContent = "Choose a photo from your camera or gallery. It will be resized and saved as a web-friendly image (up to 5 MB).";
+    setStatus("Choose a photo such as JPEG, PNG, WebP, or HEIC.", "error");
+    return;
+  }
+  if (image.size < 1) {
+    imageInput.value = "";
+    showImagePreview(savedImageUrl, savedImageUrl ? "Saved plate photo" : "");
+    imageNote.textContent = "Choose a photo from your camera or gallery. It will be resized and saved as a web-friendly image (up to 5 MB).";
+    setStatus("The selected photo is empty. Choose another photo.", "error");
+    return;
+  }
+  if (previewObjectUrl) {
+    URL.revokeObjectURL(previewObjectUrl);
+  }
+  const localPreviewUrl = URL.createObjectURL(image);
+  showImagePreview(localPreviewUrl, `Selected photo: ${image.name}`, true);
+  imageNote.textContent = `Ready to upload: ${image.name}. Save the plate to resize and apply this photo.`;
+  setStatus("");
+});
+
+clearImageButton.addEventListener("click", () => {
+  imageInput.value = "";
+  showImagePreview(savedImageUrl, savedImageUrl ? "Saved plate photo" : "");
+  imageNote.textContent = savedImageUrl
+    ? "Saved photo will be kept. Choose another photo to replace it."
+    : "No photo selected. This plate will be saved without a photo.";
+  setStatus("");
+});
 
 async function uploadSelectedImage() {
   const image = imageInput.files[0];
   if (!image) {
     return savedImageUrl;
   }
-  if (!["image/jpeg", "image/png", "image/webp"].includes(image.type)) {
-    throw new Error("Choose a JPEG, PNG, or WebP image.");
+  const sourceType = image.type.toLowerCase();
+  if (!SOURCE_IMAGE_TYPES.has(sourceType)) {
+    throw new Error("Choose a photo such as JPEG, PNG, WebP, or HEIC.");
   }
-  if (image.size < 1 || image.size > 5 * 1024 * 1024) {
-    throw new Error("The image must be no larger than 5 MB.");
+  if (image.size < 1) {
+    throw new Error("The selected photo is empty. Choose another photo.");
   }
+  const normalized = await normalizeImage(image);
+  setStatus("Uploading photo and saving plate…");
   const response = await fetch("/api/admin/images", {
     method: "POST",
     credentials: "same-origin",
-    headers: { "Content-Type": image.type },
-    body: image,
+    headers: { "Content-Type": normalized.type },
+    body: normalized,
   });
   let body = {};
   try {
@@ -231,14 +514,63 @@ async function uploadSelectedImage() {
   if (!response.ok) {
     if (response.status === 401) {
       showSignedOut();
+      throw new Error("Your session expired. Please sign in again.");
     }
-    throw new Error(body.error || "The image could not be uploaded.");
+    throw new Error(apiErrorMessage(body, "The image could not be uploaded. Please try again."));
   }
   return body.imageUrl;
 }
 
+async function normalizeImage(file) {
+  const sourceType = file.type.toLowerCase();
+  const canDecode = typeof createImageBitmap === "function";
+  if (!canDecode) {
+    if (sourceType === "image/heic" || sourceType === "image/heif") {
+      throw new Error("This device could not convert that HEIC photo. Choose JPEG or PNG instead.");
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      throw new Error("This photo is larger than 5 MB and this browser could not resize it. Choose a smaller photo.");
+    }
+    return file;
+  }
+
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    throw new Error("This photo format could not be opened on this device. Choose JPEG or PNG instead.");
+  }
+  const scale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(bitmap.width, bitmap.height));
+  const width = Math.max(1, Math.round(bitmap.width * scale));
+  const height = Math.max(1, Math.round(bitmap.height * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) {
+    bitmap.close?.();
+    throw new Error("This device could not prepare the photo. Choose a smaller JPEG or PNG.");
+  }
+  context.drawImage(bitmap, 0, 0, width, height);
+  bitmap.close?.();
+
+  let quality = 0.82;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+    if (blob && blob.size > 0 && blob.size <= MAX_IMAGE_BYTES) {
+      return blob;
+    }
+    quality -= 0.12;
+  }
+  throw new Error("This photo could not be reduced below 5 MB. Choose a smaller photo.");
+}
+
 async function deletePlate(plate) {
   if (!window.confirm(`Delete “${plate.name}”? Saved history will prevent deletion.`)) {
+    return;
+  }
+  const deleteButton = document.querySelector(`[aria-label="Delete ${plate.name}"]`);
+  if (deleteButton && !beginBusy(deleteButton, "Deleting…")) {
     return;
   }
   setStatus(`Deleting ${plate.name}…`);
@@ -254,11 +586,18 @@ async function deletePlate(plate) {
     setStatus("Plate deleted.", "success");
   } catch (error) {
     setStatus(error.message, "error");
+  } finally {
+    if (deleteButton) {
+      endBusy(deleteButton);
+    }
   }
 }
 
 signInForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (!beginBusy(signInSubmit, "Signing in…")) {
+    return;
+  }
   setStatus("Signing in…");
   const formData = new FormData(signInForm);
   try {
@@ -275,26 +614,115 @@ signInForm.addEventListener("submit", async (event) => {
     await showDashboard();
   } catch (error) {
     setStatus(error.message, "error");
+  } finally {
+    endBusy(signInSubmit);
+  }
+});
+
+forgotPasswordButton.addEventListener("click", () => {
+  signInPanel.hidden = true;
+  recoveryRequestPanel.hidden = false;
+  document.querySelector("#recovery-email").value =
+    document.querySelector("#email").value;
+  document.querySelector("#recovery-email").focus();
+  setStatus("");
+});
+
+backToSignInButton.addEventListener("click", () => {
+  recoveryRequestPanel.hidden = true;
+  signInPanel.hidden = false;
+  document.querySelector("#email").focus();
+  setStatus("");
+});
+
+recoveryRequestForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!beginBusy(recoverySubmit, "Sending…")) {
+    return;
+  }
+  setStatus("Sending password reset email…");
+  const email = new FormData(recoveryRequestForm).get("email");
+  try {
+    const result = await apiRequest("/api/admin/password-recovery", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+    setStatus(
+      typeof result.message === "string"
+        ? result.message
+        : "If the address belongs to the owner account, a password reset email will arrive shortly. Check the inbox and spam folder.",
+      "success",
+    );
+  } catch (error) {
+    setStatus(error.message, "error");
+  } finally {
+    endBusy(recoverySubmit);
+  }
+});
+
+backFromPasswordResetButton.addEventListener("click", () => {
+  passwordResetPanel.hidden = true;
+  signInPanel.hidden = false;
+  document.querySelector("#email").focus();
+  setStatus("");
+});
+
+passwordResetForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const formData = new FormData(passwordResetForm);
+  const password = formData.get("newPassword");
+  if (password !== formData.get("confirmPassword")) {
+    setStatus("Those passwords do not match. Please enter them again.", "error");
+    document.querySelector("#confirm-password").focus();
+    return;
+  }
+  if (!beginBusy(passwordResetSubmit, "Saving…")) {
+    return;
+  }
+  setStatus("Updating your password…");
+  try {
+    await apiRequest("/api/admin/password-recovery/update", {
+      method: "POST",
+      body: JSON.stringify({ password }),
+    });
+    passwordResetForm.reset();
+    passwordResetPanel.hidden = true;
+    signInPanel.hidden = false;
+    setStatus("Your password has been updated. Please sign in with your new password.", "success");
+    document.querySelector("#email").focus();
+  } catch (error) {
+    setStatus(error.message, "error");
+  } finally {
+    endBusy(passwordResetSubmit);
   }
 });
 
 signOutButton.addEventListener("click", async () => {
+  if (!beginBusy(signOutButton, "Signing out…")) {
+    return;
+  }
   try {
     await apiRequest("/api/admin/session", { method: "DELETE" });
     showSignedOut();
     setStatus("Signed out.", "success");
   } catch (error) {
     setStatus(error.message, "error");
+  } finally {
+    endBusy(signOutButton);
   }
 });
 
 plateForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (!beginBusy(savePlateButton, "Saving…")) {
+    return;
+  }
   const price = Number(priceInput.value);
   const priceCents = Math.round(price * 100);
   if (!Number.isFinite(price) || price < 0 || Math.abs(priceCents / 100 - price) > 0.000001) {
     setStatus("Enter a valid price with no more than two decimal places.", "error");
     priceInput.focus();
+    endBusy(savePlateButton);
     return;
   }
 
@@ -320,13 +748,19 @@ plateForm.addEventListener("submit", async (event) => {
     setStatus(`${saved.plate.name} saved.`, "success");
   } catch (error) {
     setStatus(error.message, "error");
+  } finally {
+    endBusy(savePlateButton);
   }
 });
 
 setTodayButton.addEventListener("click", async () => {
+  if (!beginBusy(setTodayButton, "Saving…")) {
+    return;
+  }
   if (!todaySelect.value) {
     setStatus("Choose a saved plate first.", "error");
     todaySelect.focus();
+    endBusy(setTodayButton);
     return;
   }
   setStatus("Setting today’s plate…");
@@ -341,6 +775,8 @@ setTodayButton.addEventListener("click", async () => {
     await loadDashboard();
   } catch (error) {
     setStatus(error.message, "error");
+  } finally {
+    endBusy(setTodayButton);
   }
 });
 
@@ -353,6 +789,20 @@ cancelEditButton.addEventListener("click", resetForm);
 
 async function initialize() {
   document.querySelector("#email").value = "corne.dawson@gmail.com";
+  document.querySelector("#recovery-email").value = "corne.dawson@gmail.com";
+  const recovery = new URLSearchParams(window.location.search).get("recovery");
+  if (recovery) {
+    window.history.replaceState(null, "", window.location.pathname);
+    if (recovery === "ready") {
+      signInPanel.hidden = true;
+      passwordResetPanel.hidden = false;
+      document.querySelector("#new-password").focus();
+      setStatus("Reset link verified. Choose a new password of at least 8 characters.");
+      return;
+    }
+    setStatus("That password reset link is invalid or has expired. Request a new one.", "error");
+    return;
+  }
   try {
     const session = await apiRequest("/api/admin/session");
     if (session.authenticated) {

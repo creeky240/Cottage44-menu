@@ -25,6 +25,18 @@ type DailyPlate = {
   };
 };
 
+function isServiceDate(value: unknown): value is string {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function isPlannableDate(value: string, today: string): boolean {
+  const requested = Date.parse(`${value}T00:00:00Z`);
+  const current = Date.parse(`${today}T00:00:00Z`);
+  return Number.isFinite(requested) &&
+    requested >= current &&
+    requested <= current + 365 * 24 * 60 * 60 * 1000;
+}
+
 function validDailyPlate(value: unknown, config: SupabaseConfig): value is DailyPlate {
   if (typeof value !== "object" || value === null) {
     return false;
@@ -132,6 +144,7 @@ export async function handleTodayAdminRequest(
   }
 
   const body = await readJsonBody(request, 4096);
+  const todayDate = getBusinessDate(now);
   if (
     typeof body !== "object" ||
     body === null ||
@@ -144,7 +157,17 @@ export async function handleTodayAdminRequest(
       context.cookie,
     );
   }
-  const serviceDate = getBusinessDate(now);
+  const requestedServiceDate =
+    "serviceDate" in body ? body.serviceDate : undefined;
+  const serviceDate = isServiceDate(requestedServiceDate)
+    ? requestedServiceDate
+    : todayDate;
+  if (!isPlannableDate(serviceDate, todayDate)) {
+    return withCookie(
+      jsonResponse({ error: "Choose a date from today through the next year." }, 400),
+      context.cookie,
+    );
+  }
   const response = await adminSupabaseFetch(
     context,
     "/rest/v1/daily_plates?on_conflict=service_date&select=service_date,plate:plates(id,name,description,price_cents,image_url)",
@@ -162,8 +185,12 @@ export async function handleTodayAdminRequest(
     dependencies,
   );
   if (!response?.ok) {
+    dependencies.logger?.error?.(`[admin] Saving the plate for ${serviceDate} failed.`);
     return withCookie(
-      adminFailure(dependencies.logger ?? console, "Setting today's plate failed."),
+      jsonResponse(
+        { error: `The plate for ${serviceDate} could not be saved. Please try again.` },
+        502,
+      ),
       context.cookie,
     );
   }
@@ -181,7 +208,10 @@ export async function handleTodayAdminRequest(
     rows[0].plate.id !== body.plateId
   ) {
     return withCookie(
-      adminFailure(dependencies.logger ?? console, "Today's plate response was invalid."),
+      jsonResponse(
+        { error: `The plate for ${serviceDate} could not be saved. Please try again.` },
+        502,
+      ),
       context.cookie,
     );
   }

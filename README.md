@@ -25,6 +25,15 @@ For local API development, install dependencies with `npm ci`, copy
 project URL and publishable key. Start Pages locally with `npm run dev`.
 `.dev.vars` is ignored by Git and must not be committed. The admin UI and API
 require Cloudflare Pages; GitHub Pages serves only the static menu.
+Owner password resets use Supabase's one-time recovery email. Configure
+`ADMIN_SITE_URL` for the production custom domain and local development.
+Cloudflare Pages preview origins are resolved from the request only when they
+match this project's `*.cottage44-menu-pages.pages.dev` domain. Configure the
+Supabase redirect allow-list and recovery email template as described in
+[the setup notes](docs/architecture.md#local-setup-and-manual-account-steps).
+If a reset email is not delivered, check Supabase SMTP settings and rate
+limits before requesting another: its built-in SMTP is limited to two
+messages per project per hour and only sends to organization-team addresses.
 
 ## GitHub Pages
 
@@ -46,12 +55,27 @@ artifact contains LCOV and text reports. CI does not deploy to a hosting
 provider.
 
 Successful CI runs on this repository upload `coverage/lcov.info` to Codecov.
-Fork pull requests still run checks and retain the coverage artifact, but skip
-the upload because they cannot access the Codecov environment secret. Browse
-coverage by file and branch on the
+Pull requests from forks use Codecov's public-repository tokenless path, so
+coverage can be reported without exposing the repository's Codecov secret.
+Browse coverage by file and branch on the
 [Codecov dashboard](https://app.codecov.io/gh/sdcreek240/Cottage44-menu). The
 dashboard and pull request comments require Codecov's GitHub App to be
 authorized for this repository.
+
+Pull requests into `dev` also receive a Cloudflare Pages preview comment from
+`.github/workflows/cloudflare-preview.yml`. The repository must have
+`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` configured as Actions
+secrets, and the Pages project must be named `cottage44-menu-pages`.
+
+## Supabase migrations
+
+After CI passes on a push to `dev` or `main`, changes under
+`supabase/migrations/` automatically apply pending migrations to the configured
+Supabase project. Before the first such push, configure the GitHub environment
+secrets and project-ref variable, then reconcile the history for the two
+migrations that were already applied manually. See
+[the migration automation setup](docs/architecture.md#automated-supabase-migrations)
+for the exact one-time steps.
 
 GitHub Pages is the current static deployment; Cloudflare Pages is the proposed
 production host. This backend foundation does not deploy Pages or change DNS.
@@ -75,7 +99,6 @@ distributed under the SIL Open Font License 1.1; see
 
 The brand palette lives at the top of `docs/styles.css` in the `--brand-*`
 tokens: charcoal `--brand-primary` (`#2c2a2a`) and red `--brand-accent`
-(`#c32025`). Components should use the semantic `--color-*` tokens instead of
-hard-coding colors. Dark mode uses readable text and accent variants while the
-canonical brand tokens remain unchanged. Update the brand tokens in one place
-to change the palette consistently across the site.
+(`#C12025`). Components should use the semantic `--color-*` tokens instead of
+hard-coding colors. Both light and dark themes use the same brand accent,
+including on the owner admin page.

@@ -73,6 +73,7 @@ const menuSections = document.querySelector("#menu-sections");
 const themeToggle = document.querySelector(".theme-toggle");
 const themeLabel = document.querySelector(".theme-toggle__label");
 const todayPlate = document.querySelector("#today-plate");
+const tomorrowPlate = document.querySelector("#tomorrow-plate");
 
 for (const { category, items } of menu) {
   const sectionId = `category-${category.toLowerCase()}`;
@@ -152,17 +153,17 @@ function todayInSouthAfrica() {
   return `${values.year}-${values.month}-${values.day}`;
 }
 
-function isValidServiceDate(value) {
+function isValidServiceDate(value, expected = todayInSouthAfrica()) {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     return false;
   }
   const date = new Date(`${value}T00:00:00.000Z`);
   return !Number.isNaN(date.getTime()) &&
     date.toISOString().slice(0, 10) === value &&
-    value === todayInSouthAfrica();
+    value === expected;
 }
 
-function isValidPlate(value) {
+function isValidPlate(value, expectedDate = todayInSouthAfrica()) {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return false;
   }
@@ -182,7 +183,7 @@ function isValidPlate(value) {
       value.imageUrl.length <= 2048 &&
       isHttpsUrl(value.imageUrl)
     )) &&
-    isValidServiceDate(value.serviceDate)
+    isValidServiceDate(value.serviceDate, expectedDate)
   );
 }
 
@@ -195,20 +196,20 @@ function isHttpsUrl(value) {
   }
 }
 
-function finishPlateState() {
-  todayPlate.setAttribute("aria-busy", "false");
+function finishPlateState(target) {
+  target.setAttribute("aria-busy", "false");
 }
 
-function renderPlateMessage(message) {
+function renderPlateMessage(target, message) {
   const status = document.createElement("p");
   status.className = "plate-day__status";
   status.setAttribute("role", "status");
   status.textContent = message;
-  todayPlate.replaceChildren(status);
-  finishPlateState();
+  target.replaceChildren(status);
+  finishPlateState(target);
 }
 
-function renderPlate(plate) {
+function renderPlate(target, plate) {
   const article = document.createElement("article");
   article.className = "plate-card";
 
@@ -263,8 +264,8 @@ function renderPlate(plate) {
   }).format(plate.priceCents / 100);
   details.append(name, description, date, price);
   article.append(imageFrame, details);
-  todayPlate.replaceChildren(article);
-  finishPlateState();
+  target.replaceChildren(article);
+  finishPlateState(target);
 }
 
 async function loadTodayPlate() {
@@ -289,16 +290,28 @@ async function loadTodayPlate() {
     ) {
       throw new Error("Invalid today's plate response.");
     }
-    if (payload.plate === null) {
-      renderPlateMessage("No plate has been announced for today. Please check back later.");
-      return;
-    }
-    if (!isValidPlate(payload.plate)) {
+    if (payload.plate !== null && !isValidPlate(payload.plate)) {
       throw new Error("Invalid today's plate response.");
     }
-    renderPlate(payload.plate);
+    if (payload.plate === null) {
+      renderPlateMessage(todayPlate, "No plate has been announced for today. Please check back later.");
+    } else {
+      renderPlate(todayPlate, payload.plate);
+    }
+    const tomorrow = new Date(`${todayInSouthAfrica()}T00:00:00.000Z`);
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+    const tomorrowDate = tomorrow.toISOString().slice(0, 10);
+    const nextPlate = payload.nextPlate ?? null;
+    if (nextPlate === null) {
+      renderPlateMessage(tomorrowPlate, "Tomorrow's plate has not been announced yet.");
+    } else if (!isValidPlate(nextPlate, tomorrowDate)) {
+      throw new Error("Invalid tomorrow's plate response.");
+    } else {
+      renderPlate(tomorrowPlate, nextPlate);
+    }
   } catch {
-    renderPlateMessage("Today's plate is temporarily unavailable. Please try again later.");
+    renderPlateMessage(todayPlate, "Today's plate is temporarily unavailable. Please try again later.");
+    renderPlateMessage(tomorrowPlate, "Tomorrow's plate is temporarily unavailable. Please try again later.");
   }
 }
 

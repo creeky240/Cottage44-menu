@@ -1,11 +1,20 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex, nofollow">
-    <meta name="theme-color" content="#f7f5ef">
+    <meta name="theme-color" content="#1c1a1a">
     <title>Owner admin — Cottage 44</title>
+    <script>
+      const savedTheme = localStorage.getItem("cottage44-theme");
+      const initialTheme = savedTheme === "dark" || savedTheme === "light"
+        ? savedTheme
+        : "dark";
+      document.documentElement.dataset.theme = initialTheme;
+      document.querySelector('meta[name="theme-color"]').content =
+        initialTheme === "dark" ? "#1c1a1a" : "#f7f5ef";
+    </script>
     <link rel="stylesheet" href="admin.css">
     <script src="admin.js" defer></script>
   </head>
@@ -16,7 +25,7 @@
       <button id="sign-out" class="button button--quiet" type="button" hidden>Sign out</button>
     </header>
     <main id="main">
-      <p id="status" class="status" role="status" aria-live="polite"></p>
+      <div id="status" class="status" role="status" aria-live="polite" aria-atomic="true" hidden></div>
       <section id="sign-in-panel" class="panel sign-in" aria-labelledby="sign-in-title">
         <h1 id="sign-in-title">Owner sign in</h1>
         <p>Sign in with the owner account to manage today’s plate.</p>
@@ -29,15 +38,40 @@
             <input id="remember-me" name="rememberMe" type="checkbox" checked>
             Remember me for 30 days
           </label>
-          <button class="button" type="submit">Sign in</button>
+          <button id="sign-in-submit" class="button" type="submit">Sign in</button>
         </form>
+        <button id="forgot-password" class="text-button" type="button">Forgot your password?</button>
+      </section>
+
+      <section id="recovery-request-panel" class="panel sign-in" aria-labelledby="recovery-request-title" hidden>
+        <h1 id="recovery-request-title">Reset your password</h1>
+        <p>Enter your email and we’ll send a password reset link if it matches the owner account.</p>
+        <form id="recovery-request-form">
+          <label for="recovery-email">Email</label>
+          <input id="recovery-email" name="email" type="email" autocomplete="username" required>
+          <button id="recovery-submit" class="button" type="submit">Email me a reset link</button>
+        </form>
+        <button id="back-to-sign-in" class="text-button" type="button">Back to sign in</button>
+      </section>
+
+      <section id="password-reset-panel" class="panel sign-in" aria-labelledby="password-reset-title" hidden>
+        <h1 id="password-reset-title">Choose a new password</h1>
+        <p>Enter the new password you’d like to use for the owner account.</p>
+        <form id="password-reset-form">
+          <label for="new-password">New password</label>
+          <input id="new-password" name="newPassword" type="password" autocomplete="new-password" minlength="8" maxlength="256" required>
+          <label for="confirm-password">Enter it again</label>
+          <input id="confirm-password" name="confirmPassword" type="password" autocomplete="new-password" minlength="8" maxlength="256" required>
+          <button id="password-reset-submit" class="button" type="submit">Save new password</button>
+        </form>
+        <button id="back-from-password-reset" class="text-button" type="button">Back to sign in</button>
       </section>
 
       <div id="dashboard" hidden>
         <section class="panel" aria-labelledby="today-title">
           <div class="section-heading">
             <div>
-              <p class="eyebrow">South African service date</p>
+              <p class="eyebrow">Step 1 · Choose today’s plate</p>
               <h1 id="today-title">Today’s plate <span id="service-date"></span></h1>
             </div>
           </div>
@@ -52,11 +86,12 @@
         <section class="panel" aria-labelledby="editor-title">
           <div class="section-heading">
             <div>
-              <p class="eyebrow">Create or update a saved plate</p>
+              <p class="eyebrow">Step 2 · Add or update a plate</p>
               <h2 id="editor-title">Plate details</h2>
             </div>
             <button id="new-plate" class="button button--quiet" type="button">New plate</button>
           </div>
+          <p class="muted">Add the details once, then choose this saved plate whenever it is served.</p>
           <form id="plate-form">
             <input id="plate-id" type="hidden">
             <label for="plate-name">Name</label>
@@ -65,25 +100,49 @@
             <textarea id="plate-description" name="description" maxlength="1000" rows="3"></textarea>
             <label for="plate-price">Price (ZAR)</label>
             <input id="plate-price" name="price" type="number" min="0" max="1000000" step="0.01" required>
-            <label for="plate-image">Plate photo (JPEG, PNG, or WebP; maximum 5 MB)</label>
-            <input id="plate-image" name="image" type="file" accept="image/jpeg,image/png,image/webp">
-            <p id="image-note" class="muted">No photo selected. Choosing a new image replaces the saved photo.</p>
+            <label for="plate-image">Food photo (optional)</label>
+            <input id="plate-image" name="image" type="file" accept="image/*,.heic,.heif">
+            <p id="image-note" class="muted">Choose a photo from your camera or gallery. It will be resized and saved as a web-friendly image (up to 5 MB).</p>
+            <div id="image-preview" class="image-preview" hidden>
+              <img id="image-preview-image" alt="">
+              <button id="clear-image" class="button button--quiet" type="button">Clear selected photo</button>
+            </div>
             <div class="inline-form">
-              <button class="button" type="submit">Save plate</button>
+                  <button id="save-plate" class="button" type="submit">Save plate details</button>
               <button id="cancel-edit" class="button button--quiet" type="button" hidden>Cancel edit</button>
             </div>
           </form>
         </section>
 
-        <section class="panel" aria-labelledby="saved-title">
-          <h2 id="saved-title">Saved plates</h2>
-          <ul id="plate-list" class="plate-list"></ul>
+        <section class="panel" aria-labelledby="planning-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Step 3 · Plan ahead</p>
+              <h2 id="planning-title">Plan a weekday</h2>
+            </div>
+          </div>
+          <p class="muted">Choose a date and a saved plate. You can prepare the whole week before Friday.</p>
+          <label for="schedule-date">Date to plan</label>
+          <input id="schedule-date" type="date">
+          <label for="schedule-select">Saved plate for that date</label>
+          <div class="inline-form">
+            <select id="schedule-select" aria-label="Choose a saved plate for the planned date"></select>
+            <button id="save-schedule" class="button" type="button">Save this day</button>
+          </div>
+          <p id="schedule-summary" class="muted"></p>
+          <h3 class="planner-subtitle">Quick plan for the next weekdays</h3>
+          <div id="weekly-plan-list" class="weekly-plan-list" aria-live="polite"></div>
         </section>
 
-        <section class="panel" aria-labelledby="history-title">
-          <h2 id="history-title">Recent history</h2>
+        <details class="panel collapsible">
+          <summary><span><span class="eyebrow">Step 4</span><strong id="saved-title">Saved plates</strong></span><span class="summary-hint">Reuse or edit</span></summary>
+          <ul id="plate-list" class="plate-list"></ul>
+        </details>
+
+        <details class="panel collapsible">
+          <summary><span><span class="eyebrow">Step 5</span><strong id="history-title">Recent history</strong></span><span class="summary-hint">Past dates</span></summary>
           <ol id="history-list" class="history-list"></ol>
-        </section>
+        </details>
       </div>
     </main>
   </body>
