@@ -73,7 +73,8 @@ The access and refresh tokens are held only in a `Secure` (on HTTPS),
 `HttpOnly`, `SameSite=Strict`, `/api/admin` cookie; the admin JavaScript never
 reads or stores them. Mutations require the exact request `Origin` and an
 authenticated owner session. A checked **Remember me** choice (default) gives
-the cookie a 30-day lifetime; unchecked sessions use an 8-hour lifetime.
+the cookie a 30-day lifetime; unchecked sessions use a browser-session cookie
+without a persistent expiry.
 Supabase refresh responses preserve the selected duration.
 
 The server accepts only `corne.dawson@gmail.com`, verified against the

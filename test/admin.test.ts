@@ -40,7 +40,7 @@ function sessionRequest(
 test("password sign-in sets a secure HttpOnly cookie for the selected duration, never returns tokens", async () => {
   for (const [rememberMe, expectedAge] of [
     [true, "2592000"],
-    [false, "28800"],
+    [false, null],
   ] as const) {
     const request = new Request("https://menu.example/api/admin/session", {
       method: "POST",
@@ -74,7 +74,11 @@ test("password sign-in sets a secure HttpOnly cookie for the selected duration, 
     assert.match(cookie, /Secure/);
     assert.match(cookie, /SameSite=Strict/);
     assert.match(cookie, /Path=\/api\/admin/);
-    assert.match(cookie, new RegExp(`Max-Age=${expectedAge}`));
+    if (expectedAge) {
+      assert.match(cookie, new RegExp(`Max-Age=${expectedAge}`));
+    } else {
+      assert.doesNotMatch(cookie, /Max-Age=/);
+    }
     assert.doesNotMatch(cookie, /; ?(access|refresh)-token=/i);
     assert.deepEqual(readCookiePayload(cookie), {
       accessToken: "access-secret-test",
@@ -149,6 +153,26 @@ test("a remembered session keeps its 30-day cookie when Supabase refreshes token
   });
   assert.match(response.headers.get("Set-Cookie") ?? "", /Max-Age=2592000/);
   assert.equal(readCookiePayload(response.headers.get("Set-Cookie") ?? "").rememberMe, true);
+});
+
+test("an unchecked session remains a browser-session cookie when Supabase refreshes tokens", async () => {
+  const request = sessionRequest(false);
+  const response = await handleSessionRequest(request, env, {
+    fetchImpl: async (input) => {
+      if (String(input).endsWith("/auth/v1/user")) {
+        return jsonResponse({ message: "expired" }, 401);
+      }
+      return jsonResponse({
+        access_token: "new-access",
+        refresh_token: "new-refresh",
+        user: { email: OWNER_EMAIL },
+      });
+    },
+  });
+
+  assert.equal(response.status, 200);
+  assert.doesNotMatch(response.headers.get("Set-Cookie") ?? "", /Max-Age=|Expires=/);
+  assert.equal(readCookiePayload(response.headers.get("Set-Cookie") ?? "").rememberMe, false);
 });
 
 test("image upload rejects cross-origin, unsupported, and signature-mismatched content", async () => {

@@ -7,7 +7,6 @@ import { jsonResponse, serviceUnavailable } from "./http.ts";
 
 export const OWNER_EMAIL = "corne.dawson@gmail.com";
 const COOKIE_NAME = "c44_admin";
-const SESSION_MAX_AGE = 60 * 60 * 8;
 const REMEMBERED_MAX_AGE = 60 * 60 * 24 * 30;
 
 export type AdminSession = {
@@ -41,9 +40,12 @@ export function sessionCookie(request: Request, session: AdminSession): string {
     .replaceAll("+", "-")
     .replaceAll("/", "_")
     .replaceAll("=", "");
+  const attributes = cookieAttributes(request);
+  if (session.rememberMe) {
+    attributes.push(`Max-Age=${REMEMBERED_MAX_AGE}`);
+  }
   return `${COOKIE_NAME}=${encoded}; ${[
-    ...cookieAttributes(request),
-    `Max-Age=${session.rememberMe ? REMEMBERED_MAX_AGE : SESSION_MAX_AGE}`,
+    ...attributes,
   ].join("; ")}`;
 }
 
