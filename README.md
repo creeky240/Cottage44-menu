@@ -33,11 +33,22 @@ CI workflow checks changes but does not deploy the site.
 
 ## Continuous integration
 
-The `CI / checks` job runs for pull requests and for pushes to `dev` or `main`.
-It installs from the lockfile, runs menu and API unit tests with coverage,
-type-checks the Functions, checks static files and JavaScript syntax, and
-builds the Pages Functions bundle with Wrangler. CI does not deploy to a
-hosting provider.
+The `checks` job runs for pull requests and for pushes to `dev` or `main`. It
+installs from the lockfile, runs the menu and API tests with Node's built-in
+V8 coverage collection, type-checks the Functions, checks static files and
+JavaScript syntax, and builds the Pages Functions bundle with Wrangler. The
+coverage summary measures `docs/menu.js`; HTML, CSS, the inline theme script,
+and API files are not included in that LCOV report. The `javascript-coverage`
+artifact contains LCOV and text reports. CI does not deploy to a hosting
+provider.
+
+Successful CI runs on this repository upload `coverage/lcov.info` to Codecov.
+Fork pull requests still run checks and retain the coverage artifact, but skip
+the upload because they cannot access the Codecov environment secret. Browse
+coverage by file and branch on the
+[Codecov dashboard](https://app.codecov.io/gh/sdcreek240/Cottage44-menu). The
+dashboard and pull request comments require Codecov's GitHub App to be
+authorized for this repository.
 
 GitHub Pages is the current static deployment; Cloudflare Pages is the proposed
 production host. This backend foundation does not deploy Pages or change DNS.

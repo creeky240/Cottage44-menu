@@ -5,8 +5,9 @@
   "scripts": {
     "dev": "wrangler pages dev docs --ip 127.0.0.1",
     "test": "node --import tsx --test test/*.test.js test/*.test.ts",
+    "coverage": "node scripts/coverage.js",
     "test:coverage": "node --experimental-test-coverage --import tsx --test test/*.test.js test/*.test.ts",
-    "check": "node --check docs/menu.js && node --check test/menu.test.js && tsc --noEmit && test -s docs/index.html && test -s docs/styles.css",
+    "check": "node --check docs/menu.js && node --check scripts/coverage.js && node --check test/menu.test.js && node --check test/coverage.test.js && tsc --noEmit && test -s docs/index.html && test -s docs/styles.css",
     "build": "wrangler pages functions build functions --outdir .wrangler/functions-build"
   },
   "devDependencies": {
