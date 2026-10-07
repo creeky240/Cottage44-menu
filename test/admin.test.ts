@@ -647,6 +647,36 @@ test("valid image upload uses an opaque generated object key and fixed public bu
   assert.match(imageUrl, /^https:\/\/cottage44-test\.supabase\.co\/storage\/v1\/object\/public\/cottage44-plates\/[0-9a-f-]{36}\.jpg$/i);
 });
 
+test("image upload accepts valid phone-image metadata and trailing bytes", async () => {
+  const cookieRequest = sessionRequest(false, "https://menu.example/api/admin/images");
+  const body = new Uint8Array([
+    0xff, 0xd8, 0xff, 0xe1, 0x00, 0x04, 0x45, 0x58,
+    0xff, 0xd9, 0x00, 0x00, 0x00,
+  ]);
+  const request = new Request(cookieRequest.url, {
+    method: "POST",
+    headers: {
+      Origin: "https://menu.example",
+      Cookie: cookieRequest.headers.get("Cookie") ?? "",
+      "Content-Type": "image/jpeg",
+    },
+    body,
+  });
+  let storageCalled = false;
+  const response = await handleImageUpload(request, env, {
+    fetchImpl: async (input) => {
+      if (String(input).endsWith("/auth/v1/user")) {
+        return jsonResponse({ email: OWNER_EMAIL });
+      }
+      storageCalled = true;
+      return jsonResponse({});
+    },
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(storageCalled, true);
+});
+
 test("image upload enforces the 5 MiB cap even when Content-Length is absent", async () => {
   const cookieRequest = sessionRequest(false, "https://menu.example/api/admin/images");
   const oversizedBody = new ArrayBuffer(5 * 1024 * 1024 + 1);

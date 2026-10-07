@@ -31,5 +31,5 @@ test("creates LCOV line and function metrics from Node V8 ranges", () => {
   assert.match(lcov, /LH:1/);
   assert.match(summary, /Lines: 50\.00% \(1\/2\)/);
   assert.match(summary, /Functions: 50\.00% \(1\/2\)/);
-  assert.match(summary, /docs\/menu\.js only/);
+  assert.match(summary, /docs\/menu\.js:/);
 });

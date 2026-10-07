@@ -63,27 +63,19 @@ async function readImage(request: Request): Promise<Uint8Array | null> {
 
 function hasExpectedSignature(bytes: Uint8Array, mime: string): boolean {
   if (mime === "image/jpeg") {
-    return (
-      bytes.length >= 6 &&
-      bytes[0] === 0xff &&
-      bytes[1] === 0xd8 &&
-      bytes[2] === 0xff &&
-      bytes[bytes.length - 2] === 0xff &&
-      bytes[bytes.length - 1] === 0xd9
-    );
+    if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8 || bytes[2] !== 0xff) {
+      return false;
+    }
+    for (let index = 3; index < bytes.length - 1; index += 1) {
+      if (bytes[index] === 0xff && bytes[index + 1] === 0xd9) {
+        return true;
+      }
+    }
+    return false;
   }
   if (mime === "image/png") {
-    const hasImageData = bytes.some(
-      (byte, index) =>
-        index >= 29 &&
-        index < bytes.length - 12 &&
-        byte === 0x49 &&
-        bytes[index + 1] === 0x44 &&
-        bytes[index + 2] === 0x41 &&
-        bytes[index + 3] === 0x54,
-    );
     return (
-      bytes.length >= 45 &&
+      bytes.length >= 33 &&
       bytes[0] === 0x89 &&
       bytes[1] === 0x50 &&
       bytes[2] === 0x4e &&
@@ -97,12 +89,11 @@ function hasExpectedSignature(bytes: Uint8Array, mime: string): boolean {
       bytes[14] === 0 &&
       bytes[15] === 13 &&
       String.fromCharCode(...bytes.slice(16, 20)) === "IHDR" &&
-      hasImageData &&
-      String.fromCharCode(...bytes.slice(-8, -4)) === "IEND" &&
-      bytes[bytes.length - 4] === 0xae &&
-      bytes[bytes.length - 3] === 0x42 &&
-      bytes[bytes.length - 2] === 0x60 &&
-      bytes[bytes.length - 1] === 0x82
+      bytes.some((byte, index) =>
+        index >= 8 &&
+        index + 8 <= bytes.length &&
+        String.fromCharCode(...bytes.slice(index + 4, index + 8)) === "IEND",
+      )
     );
   }
   if (mime !== "image/webp" || bytes.length < 20) {
@@ -113,7 +104,7 @@ function hasExpectedSignature(bytes: Uint8Array, mime: string): boolean {
   const chunkLength = view.getUint32(16, true);
   return (
     String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" &&
-    view.getUint32(4, true) === bytes.length - 8 &&
+    view.getUint32(4, true) <= bytes.length - 8 &&
     String.fromCharCode(...bytes.slice(8, 12)) === "WEBP" &&
     ["VP8 ", "VP8L", "VP8X"].includes(chunk) &&
     chunkLength > 0 &&

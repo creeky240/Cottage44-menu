@@ -138,6 +138,17 @@ Admin writes only accept public URLs from this bucket.
 
 Cloudflare Pages setup and DNS changes are outside this implementation.
 
+### Current external cutover blocker
+
+The verified `dev.cottage44-menu-pages.pages.dev` and
+`cottage44-menu-pages.pages.dev` deployments serve the menu, admin page, and
+JSON Functions correctly. The custom domain `menu.cottage44.co.za` still
+serves GitHub Pages and returns 404 for the API routes, so the owner workflow
+cannot work there yet. This is an external Cloudflare custom-domain/DNS
+cutover task, not an application defect; do not change DNS as part of an app
+code review. Until the cutover is completed, use the Cloudflare Pages URL for
+admin sign-in and API-backed menu data.
+
 ## CI/CD and repository rules
 
 Use GitHub Actions for pull-request checks and branch pushes. The intended gate

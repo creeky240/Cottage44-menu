@@ -50,6 +50,9 @@ const adminSelectors = [
   "#plate-price",
   "#plate-image",
   "#image-note",
+  "#image-preview",
+  "#image-preview-image",
+  "#clear-image",
   "#plate-list",
   "#history-list",
   "#today-select",
@@ -102,6 +105,10 @@ class Element {
     this.attributes[name] = value;
   }
 
+  removeAttribute(name) {
+    delete this.attributes[name];
+  }
+
   focus() {}
 
   reset() {}
@@ -129,6 +136,7 @@ test("admin UI remembers by default and completes sign-in, upload, save, and tod
   let savedPlates = [];
   let todaysPlate = null;
   let failSignIn = true;
+  let failImageUpload = false;
   const imageUrl =
     "https://cottage44-test.supabase.co/storage/v1/object/public/cottage44-plates/123e4567-e89b-42d3-a456-426614174000.jpg";
 
@@ -162,6 +170,9 @@ test("admin UI remembers by default and completes sign-in, upload, save, and tod
       });
     }
     if (url === "/api/admin/images") {
+      if (failImageUpload) {
+        return Response.json({ error: "The image could not be uploaded. Please try again." }, { status: 502 });
+      }
       return Response.json({ imageUrl });
     }
     if (url === "/api/admin/plates" && options.method === "POST") {
@@ -172,6 +183,12 @@ test("admin UI remembers by default and completes sign-in, upload, save, and tod
       };
       savedPlates = [plate];
       return Response.json({ plate }, { status: 201 });
+    }
+    if (url.startsWith("/api/admin/plates/") && options.method === "PATCH") {
+      const input = JSON.parse(options.body);
+      const plate = { ...savedPlates[0], ...input };
+      savedPlates = [plate];
+      return Response.json({ plate });
     }
     if (url === "/api/admin/plates/today" && options.method === "POST") {
       const { plateId } = JSON.parse(options.body);
@@ -210,6 +227,10 @@ test("admin UI remembers by default and completes sign-in, upload, save, and tod
     document,
     fetch: fetchMock,
     FormData: FakeFormData,
+    URL: {
+      createObjectURL: () => "blob:preview-photo",
+      revokeObjectURL: () => {},
+    },
     URLSearchParams,
     window: {
       confirm: () => true,
@@ -236,7 +257,38 @@ test("admin UI remembers by default and completes sign-in, upload, save, and tod
   elements["#plate-name"].value = "Cottage burger";
   elements["#plate-description"].value = "Beef and chips";
   elements["#plate-price"].value = "125";
-  elements["#plate-image"].files = [{ type: "image/jpeg", size: 3 }];
+  const imageInput = elements["#plate-image"];
+  imageInput.type = "file";
+  imageInput.files = [{ type: "image/svg+xml", name: "not-a-photo.svg", size: 3 }];
+  imageInput.listeners.change();
+  assert.match(elements["#status"].textContent, /Choose a photo such as JPEG, PNG, WebP, or HEIC/);
+  assert.equal(elements["#image-preview"].hidden, true);
+
+  imageInput.files = [{ type: "image/jpeg", name: "large-photo.jpg", size: 5 * 1024 * 1024 + 1 }];
+  imageInput.listeners.change();
+  assert.match(elements["#image-note"].textContent, /resize and apply/);
+  assert.equal(elements["#image-preview"].hidden, false);
+
+  imageInput.files = [{ type: "image/jpeg", name: "burger.jpg", size: 3 * 1024 * 1024 }];
+  imageInput.listeners.change();
+  assert.equal(elements["#image-preview"].hidden, false);
+  assert.equal(elements["#image-preview-image"].src, "blob:preview-photo");
+  assert.equal(elements["#image-preview-image"].alt, "Selected photo: burger.jpg");
+  assert.match(elements["#image-note"].textContent, /Ready to upload: burger\.jpg/);
+
+  elements["#clear-image"].listeners.click();
+  assert.equal(elements["#image-preview"].hidden, true);
+  imageInput.files = [];
+  assert.equal(imageInput.files.length, 0);
+  assert.match(elements["#image-note"].textContent, /saved without a photo/);
+  imageInput.files = [{ type: "image/jpeg", name: "burger.jpg", size: 3 }];
+  imageInput.listeners.change();
+
+  failImageUpload = true;
+  await elements["#plate-form"].listeners.submit({ preventDefault() {} });
+  assert.equal(elements["#status"].textContent, "The image could not be uploaded. Please try again.");
+  assert.equal(calls.some(({ url, options }) => url === "/api/admin/plates" && options.method === "POST"), false);
+  failImageUpload = false;
   await elements["#plate-form"].listeners.submit({ preventDefault() {} });
 
   const uploadCall = calls.find(({ url }) => url === "/api/admin/images");
@@ -251,6 +303,18 @@ test("admin UI remembers by default and completes sign-in, upload, save, and tod
     priceCents: 12500,
     imageUrl,
   });
+
+  const editButton = elements["#plate-list"].children[0].children[1].children[0];
+  editButton.listeners.click();
+  assert.equal(elements["#image-preview"].hidden, false);
+  assert.equal(elements["#image-preview-image"].src, imageUrl);
+  assert.match(elements["#image-note"].textContent, /will be kept unless you choose a replacement/);
+  elements["#plate-description"].value = "Beef, cheese and chips";
+  await elements["#plate-form"].listeners.submit({ preventDefault() {} });
+  const updateCall = calls.find(({ url, options }) =>
+    url.startsWith("/api/admin/plates/") && options.method === "PATCH");
+  assert.ok(updateCall);
+  assert.equal(JSON.parse(updateCall.options.body).imageUrl, imageUrl);
 
   elements["#today-select"].value = savedPlates[0].id;
   await elements["#set-today"].listeners.click();
@@ -272,6 +336,80 @@ test("admin UI remembers by default and completes sign-in, upload, save, and tod
   assert.deepEqual(JSON.parse(recoveryCall.options.body), {
     email: "corne.dawson@gmail.com",
   });
+});
+
+test("admin UI converts HEIC and large camera photos before upload", async () => {
+  const elements = Object.fromEntries(
+    adminSelectors.map((selector) => [selector, new Element()]),
+  );
+  elements["#dashboard"].hidden = true;
+  elements["#sign-out"].hidden = true;
+  elements["#recovery-request-panel"].hidden = true;
+  elements["#password-reset-panel"].hidden = true;
+  const uploaded = [];
+  const canvas = {
+    width: 0,
+    height: 0,
+    getContext: () => ({ drawImage() {} }),
+    toBlob(callback, type, quality) {
+      uploaded.push({ type, quality, width: this.width, height: this.height });
+      callback(new Blob(["optimized"], { type }));
+    },
+  };
+  const document = {
+    querySelector: (selector) => elements[selector],
+    createElement: (tagName) => tagName === "canvas" ? canvas : new Element(),
+  };
+  const context = vm.createContext({
+    document,
+    fetch: async (url, options = {}) => {
+      if (url === "/api/admin/session") {
+        return Response.json({ authenticated: false });
+      }
+      uploaded.push({ url, options });
+      return Response.json({ imageUrl: "https://cottage44-test.supabase.co/storage/v1/object/public/cottage44-plates/123e4567-e89b-42d3-a456-426614174000.jpg" });
+    },
+    FormData: class {
+      get(name) {
+        return name === "email" ? "corne.dawson@gmail.com" : null;
+      }
+    },
+    URL: {
+      createObjectURL: () => "blob:heic-preview",
+      revokeObjectURL: () => {},
+    },
+    createImageBitmap: async () => ({
+      width: 4000,
+      height: 3000,
+      close() {},
+    }),
+    URLSearchParams,
+    window: {
+      location: { search: "", pathname: "/admin/" },
+      history: { replaceState() {} },
+    },
+    console,
+  });
+
+  vm.runInContext(adminScript, context, { filename: "docs/admin/admin.js" });
+  await new Promise(setImmediate);
+  elements["#plate-image"].files = [{
+    name: "camera.heic",
+    type: "image/heic",
+    size: 12 * 1024 * 1024,
+  }];
+  elements["#plate-image"].listeners.change();
+  assert.equal(elements["#image-preview"].hidden, false);
+
+  elements["#plate-name"].value = "Camera plate";
+  elements["#plate-price"].value = "50";
+  await elements["#plate-form"].listeners.submit({ preventDefault() {} });
+
+  const upload = uploaded.find((entry) => entry.url === "/api/admin/images");
+  assert.equal(upload.options.headers["Content-Type"], "image/jpeg");
+  assert.equal(upload.options.body.type, "image/jpeg");
+  assert.equal(uploaded[0].width, 2000);
+  assert.equal(uploaded[0].height, 1500);
 });
 
 test("recovery UI displays nested API errors as human-readable messages", async () => {

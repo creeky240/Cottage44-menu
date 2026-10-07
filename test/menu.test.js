@@ -352,6 +352,10 @@ test("includes a labelled Plate of the Day live region in the page", () => {
   assert.match(html, /<section class="plate-day" aria-labelledby="plate-day-title">/);
   assert.match(html, /id="today-plate"[\s\S]*aria-live="polite"/);
   assert.match(html, /id="plate-day-title">Plate of the Day<\/h2>/);
+  assert.match(
+    html,
+    /class="plate-day__notice">Orders can only be placed through the canteen until 15:00 \(3:00 PM\)\.<\/p>/,
+  );
 });
 
 test("provides a subtle owner sign-in link in the public site footer", () => {
