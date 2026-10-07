@@ -28,7 +28,49 @@ jobs:
           node-version: 22.22.1
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
-      - name: Run tests
-        run: npm test
+      - name: Run tests and collect JavaScript coverage
+        run: npm run coverage
       - name: Check static files and JavaScript syntax
         run: npm run check
+      - name: Upload JavaScript coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: javascript-coverage
+          path: |
+            coverage/lcov.info
+            coverage/summary.txt
+          if-no-files-found: warn
+          retention-days: 14
+
+  codecov:
+    name: Upload coverage to Codecov
+    needs: checks
+    if: >-
+      needs.checks.result == 'success' &&
+      (github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: Cottage44_menu
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository for source and Codecov configuration
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Download JavaScript coverage report
+        uses: actions/download-artifact@v4
+        with:
+          name: javascript-coverage
+          path: coverage
+      - name: Upload JavaScript coverage to Codecov
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage/lcov.info
+          disable_search: true
+          fail_ci_if_error: true
+          cleanup: true
+          name: docs-menu-js

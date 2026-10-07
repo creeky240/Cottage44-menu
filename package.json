@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test",
-    "check": "node --check docs/menu.js && node --check test/menu.test.js && test -s docs/index.html && test -s docs/styles.css"
+    "coverage": "node scripts/coverage.js",
+    "check": "node --check docs/menu.js && node --check scripts/coverage.js && node --check test/menu.test.js && node --check test/coverage.test.js && test -s docs/index.html && test -s docs/styles.css"
   }
 }

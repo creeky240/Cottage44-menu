@@ -18,11 +18,24 @@ CI workflow checks changes but does not deploy the site.
 
 ## Continuous integration
 
-The `CI / checks` job runs for pull requests and for pushes to `dev` or `main`.
-It installs from the lockfile, runs the menu tests, checks JavaScript syntax,
-and verifies the static entry point and stylesheet exist. There is no lint,
-typecheck, or build stage because the site has no application toolchain; CI
-does not deploy to a hosting provider.
+The `checks` job runs for pull requests and for pushes to `dev` or `main`. It
+installs from the lockfile, runs the menu tests with Node's built-in V8 coverage
+collection, checks JavaScript syntax, and verifies the static entry point and
+stylesheet exist. The job summary reports line and function coverage for
+`docs/menu.js`, and the `javascript-coverage` artifact contains its LCOV and
+text reports. HTML, CSS, and the inline theme initialization script are not
+included in that JavaScript coverage figure. Coverage collection uses no
+external service or secret. There is no lint, typecheck, or build stage because
+the site has no application toolchain; CI does not deploy to a hosting provider.
+
+Successful CI runs on this repository upload `coverage/lcov.info` to Codecov.
+Fork pull requests still run checks and retain the coverage artifact, but skip
+the upload because they cannot access the Codecov environment secret. Browse
+coverage by file and branch on the
+[Codecov dashboard](https://app.codecov.io/gh/sdcreek240/Cottage44-menu). The
+dashboard and pull request comments require Codecov's GitHub App to be
+authorized for this repository. The report measures `docs/menu.js` only; HTML,
+CSS, and the inline theme initialization script are not included.
 
 This describes the current deployment only. GitHub Pages' usage policy may not
 permit a commercial restaurant website, so the proposed production destination
