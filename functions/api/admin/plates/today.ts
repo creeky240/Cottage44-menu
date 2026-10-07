@@ -186,10 +186,16 @@ export async function handleTodayAdminRequest(
   );
   if (!response?.ok) {
     dependencies.logger?.error?.(`[admin] Saving the plate for ${serviceDate} failed.`);
+    const futurePlanningUnavailable =
+      serviceDate !== todayDate && [401, 403].includes(response?.status ?? 0);
     return withCookie(
       jsonResponse(
-        { error: `The plate for ${serviceDate} could not be saved. Please try again.` },
-        502,
+        {
+          error: futurePlanningUnavailable
+            ? "Future planning is not enabled yet. Please ask the site administrator to apply the latest database migration, then try again."
+            : `The plate for ${serviceDate} could not be saved. Please try again.`,
+        },
+        futurePlanningUnavailable ? 503 : 502,
       ),
       context.cookie,
     );

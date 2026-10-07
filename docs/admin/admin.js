@@ -1,6 +1,8 @@
 "use strict";
 
 const statusElement = document.querySelector("#status");
+const statusMessage = document.querySelector("#status-message");
+const statusCloseButton = document.querySelector("#status-close");
 const signInSubmit = document.querySelector("#sign-in-submit");
 const signInPanel = document.querySelector("#sign-in-panel");
 const signInForm = document.querySelector("#sign-in-form");
@@ -45,6 +47,7 @@ let history = [];
 let todayPlateId = null;
 let savedImageUrl = null;
 let previewObjectUrl = null;
+let statusTimer = null;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_IMAGE_DIMENSION = 2000;
 const SOURCE_IMAGE_TYPES = new Set([
@@ -59,11 +62,31 @@ function setStatus(message, kind = "") {
   const text = typeof message === "string"
     ? message
     : "The request could not be completed. Please try again.";
-  statusElement.textContent = text;
+  if (statusTimer !== null) {
+    clearTimeout(statusTimer);
+    statusTimer = null;
+  }
+  statusMessage.textContent = text;
   statusElement.dataset.kind = kind;
   statusElement.hidden = !text;
   statusElement.setAttribute("aria-live", kind === "error" ? "assertive" : "polite");
+  if (text && typeof setTimeout === "function") {
+    statusTimer = setTimeout(() => {
+      dismissStatus();
+    }, kind === "error" ? 10000 : 5000);
+  }
 }
+
+function dismissStatus() {
+  if (statusTimer !== null) {
+    clearTimeout(statusTimer);
+    statusTimer = null;
+  }
+  statusMessage.textContent = "";
+  statusElement.hidden = true;
+}
+
+statusCloseButton.addEventListener("click", dismissStatus);
 
 function beginBusy(button, label) {
   if (button.disabled) {
