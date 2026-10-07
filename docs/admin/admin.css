@@ -269,6 +269,22 @@ a:focus-visible {
   font-size: 0.82rem;
 }
 
+.image-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  margin-top: 0.2rem;
+}
+
+.image-preview img {
+  width: min(100%, 14rem);
+  max-height: 10rem;
+  border: 1px solid var(--line);
+  border-radius: 0.55rem;
+  object-fit: cover;
+}
+
 .plate-list,
 .history-list {
   display: grid;

@@ -19,6 +19,9 @@ const descriptionInput = document.querySelector("#plate-description");
 const priceInput = document.querySelector("#plate-price");
 const imageInput = document.querySelector("#plate-image");
 const imageNote = document.querySelector("#image-note");
+const imagePreview = document.querySelector("#image-preview");
+const imagePreviewImage = document.querySelector("#image-preview-image");
+const clearImageButton = document.querySelector("#clear-image");
 const plateList = document.querySelector("#plate-list");
 const historyList = document.querySelector("#history-list");
 const todaySelect = document.querySelector("#today-select");
@@ -32,6 +35,16 @@ let plates = [];
 let history = [];
 let todayPlateId = null;
 let savedImageUrl = null;
+let previewObjectUrl = null;
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_IMAGE_DIMENSION = 2000;
+const SOURCE_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+]);
 
 function setStatus(message, kind = "") {
   statusElement.textContent = typeof message === "string"
@@ -222,9 +235,33 @@ function resetForm() {
   plateForm.reset();
   plateIdInput.value = "";
   savedImageUrl = null;
-  imageNote.textContent = "No photo selected. Choosing a new image replaces the saved photo.";
+  imageNote.textContent = "Choose a photo from your camera or gallery. It will be resized and saved as a web-friendly image (up to 5 MB).";
+  clearImagePreview();
   cancelEditButton.hidden = true;
   document.querySelector("#editor-title").textContent = "Plate details";
+}
+
+function clearImagePreview() {
+  if (previewObjectUrl) {
+    URL.revokeObjectURL(previewObjectUrl);
+    previewObjectUrl = null;
+  }
+  imagePreviewImage.removeAttribute("src");
+  imagePreviewImage.alt = "";
+  imagePreview.hidden = true;
+}
+
+function showImagePreview(source, alt, isLocalPreview = false) {
+  clearImagePreview();
+  if (!source) {
+    return;
+  }
+  if (isLocalPreview) {
+    previewObjectUrl = source;
+  }
+  imagePreviewImage.src = source;
+  imagePreviewImage.alt = alt;
+  imagePreview.hidden = false;
 }
 
 function editPlate(plate) {
@@ -235,29 +272,74 @@ function editPlate(plate) {
   imageInput.value = "";
   savedImageUrl = plate.imageUrl;
   imageNote.textContent = savedImageUrl
-    ? "A saved photo will be kept unless you choose a replacement."
+    ? "Saved photo shown below. It will be kept unless you choose a replacement."
     : "No saved photo. Add one if you want a photo with this plate.";
+  showImagePreview(savedImageUrl, `Saved photo of ${plate.name}`);
   cancelEditButton.hidden = false;
   document.querySelector("#editor-title").textContent = `Edit ${plate.name}`;
   nameInput.focus();
 }
+
+imageInput.addEventListener("change", () => {
+  const image = imageInput.files[0];
+  if (!image) {
+    showImagePreview(savedImageUrl, savedImageUrl ? "Saved plate photo" : "");
+    imageNote.textContent = savedImageUrl
+      ? "Saved photo will be kept. Choose another photo to replace it."
+      : "No photo selected. This plate will be saved without a photo.";
+    return;
+  }
+  if (!SOURCE_IMAGE_TYPES.has(image.type.toLowerCase())) {
+    imageInput.value = "";
+    showImagePreview(savedImageUrl, savedImageUrl ? "Saved plate photo" : "");
+    imageNote.textContent = "Choose a photo from your camera or gallery. It will be resized and saved as a web-friendly image (up to 5 MB).";
+    setStatus("Choose a photo such as JPEG, PNG, WebP, or HEIC.", "error");
+    return;
+  }
+  if (image.size < 1) {
+    imageInput.value = "";
+    showImagePreview(savedImageUrl, savedImageUrl ? "Saved plate photo" : "");
+    imageNote.textContent = "Choose a photo from your camera or gallery. It will be resized and saved as a web-friendly image (up to 5 MB).";
+    setStatus("The selected photo is empty. Choose another photo.", "error");
+    return;
+  }
+  if (previewObjectUrl) {
+    URL.revokeObjectURL(previewObjectUrl);
+  }
+  const localPreviewUrl = URL.createObjectURL(image);
+  showImagePreview(localPreviewUrl, `Selected photo: ${image.name}`, true);
+  imageNote.textContent = `Ready to upload: ${image.name}. Save the plate to resize and apply this photo.`;
+  setStatus("");
+});
+
+clearImageButton.addEventListener("click", () => {
+  imageInput.value = "";
+  showImagePreview(savedImageUrl, savedImageUrl ? "Saved plate photo" : "");
+  imageNote.textContent = savedImageUrl
+    ? "Saved photo will be kept. Choose another photo to replace it."
+    : "No photo selected. This plate will be saved without a photo.";
+  setStatus("");
+});
 
 async function uploadSelectedImage() {
   const image = imageInput.files[0];
   if (!image) {
     return savedImageUrl;
   }
-  if (!["image/jpeg", "image/png", "image/webp"].includes(image.type)) {
-    throw new Error("Choose a JPEG, PNG, or WebP image.");
+  const sourceType = image.type.toLowerCase();
+  if (!SOURCE_IMAGE_TYPES.has(sourceType)) {
+    throw new Error("Choose a photo such as JPEG, PNG, WebP, or HEIC.");
   }
-  if (image.size < 1 || image.size > 5 * 1024 * 1024) {
-    throw new Error("The image must be no larger than 5 MB.");
+  if (image.size < 1) {
+    throw new Error("The selected photo is empty. Choose another photo.");
   }
+  const normalized = await normalizeImage(image);
+  setStatus("Uploading photo and saving plate…");
   const response = await fetch("/api/admin/images", {
     method: "POST",
     credentials: "same-origin",
-    headers: { "Content-Type": image.type },
-    body: image,
+    headers: { "Content-Type": normalized.type },
+    body: normalized,
   });
   let body = {};
   try {
@@ -273,6 +355,50 @@ async function uploadSelectedImage() {
     throw new Error(apiErrorMessage(body, "The image could not be uploaded. Please try again."));
   }
   return body.imageUrl;
+}
+
+async function normalizeImage(file) {
+  const sourceType = file.type.toLowerCase();
+  const canDecode = typeof createImageBitmap === "function";
+  if (!canDecode) {
+    if (sourceType === "image/heic" || sourceType === "image/heif") {
+      throw new Error("This device could not convert that HEIC photo. Choose JPEG or PNG instead.");
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      throw new Error("This photo is larger than 5 MB and this browser could not resize it. Choose a smaller photo.");
+    }
+    return file;
+  }
+
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    throw new Error("This photo format could not be opened on this device. Choose JPEG or PNG instead.");
+  }
+  const scale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(bitmap.width, bitmap.height));
+  const width = Math.max(1, Math.round(bitmap.width * scale));
+  const height = Math.max(1, Math.round(bitmap.height * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) {
+    bitmap.close?.();
+    throw new Error("This device could not prepare the photo. Choose a smaller JPEG or PNG.");
+  }
+  context.drawImage(bitmap, 0, 0, width, height);
+  bitmap.close?.();
+
+  let quality = 0.82;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+    if (blob && blob.size > 0 && blob.size <= MAX_IMAGE_BYTES) {
+      return blob;
+    }
+    quality -= 0.12;
+  }
+  throw new Error("This photo could not be reduced below 5 MB. Choose a smaller photo.");
 }
 
 async function deletePlate(plate) {

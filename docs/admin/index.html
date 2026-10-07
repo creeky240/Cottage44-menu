@@ -71,7 +71,7 @@
         <section class="panel" aria-labelledby="today-title">
           <div class="section-heading">
             <div>
-              <p class="eyebrow">South African service date</p>
+              <p class="eyebrow">Step 1 · Choose today’s plate</p>
               <h1 id="today-title">Today’s plate <span id="service-date"></span></h1>
             </div>
           </div>
@@ -86,11 +86,12 @@
         <section class="panel" aria-labelledby="editor-title">
           <div class="section-heading">
             <div>
-              <p class="eyebrow">Create or update a saved plate</p>
+              <p class="eyebrow">Step 2 · Add or update a plate</p>
               <h2 id="editor-title">Plate details</h2>
             </div>
             <button id="new-plate" class="button button--quiet" type="button">New plate</button>
           </div>
+          <p class="muted">Add the details once, then choose this saved plate whenever it is served.</p>
           <form id="plate-form">
             <input id="plate-id" type="hidden">
             <label for="plate-name">Name</label>
@@ -99,11 +100,15 @@
             <textarea id="plate-description" name="description" maxlength="1000" rows="3"></textarea>
             <label for="plate-price">Price (ZAR)</label>
             <input id="plate-price" name="price" type="number" min="0" max="1000000" step="0.01" required>
-            <label for="plate-image">Plate photo (JPEG, PNG, or WebP; maximum 5 MB)</label>
-            <input id="plate-image" name="image" type="file" accept="image/jpeg,image/png,image/webp">
-            <p id="image-note" class="muted">No photo selected. Choosing a new image replaces the saved photo.</p>
+            <label for="plate-image">Food photo (optional)</label>
+            <input id="plate-image" name="image" type="file" accept="image/*,.heic,.heif">
+            <p id="image-note" class="muted">Choose a photo from your camera or gallery. It will be resized and saved as a web-friendly image (up to 5 MB).</p>
+            <div id="image-preview" class="image-preview" hidden>
+              <img id="image-preview-image" alt="">
+              <button id="clear-image" class="button button--quiet" type="button">Clear selected photo</button>
+            </div>
             <div class="inline-form">
-              <button class="button" type="submit">Save plate</button>
+              <button class="button" type="submit">Save plate details</button>
               <button id="cancel-edit" class="button button--quiet" type="button" hidden>Cancel edit</button>
             </div>
           </form>
